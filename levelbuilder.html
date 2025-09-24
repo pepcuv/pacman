@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pac-Man Level Ontwerper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cinzel', serif;
+            background-color: #1a202c;
+            color: #f7fafc;
+        }
+        canvas {
+            background-color: #000;
+            cursor: pointer;
+            border: 2px solid #a0aec0;
+        }
+        .tool-button {
+            background-color: #4a5568;
+            border: 2px solid #a0aec0;
+            transition: all 0.2s ease-in-out;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+        }
+        .tool-button:hover {
+            background-color: #718096;
+            border-color: #cbd5e0;
+        }
+        .tool-button.active {
+            background-color: #a0aec0;
+            color: #1a202c;
+            border-color: #f7fafc;
+        }
+        #notification {
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl">
+        <h1 class="text-4xl text-center mb-4 text-yellow-300">Level Ontwerper</h1>
+        <p class="text-center text-gray-400 mb-6">Klik en sleep om muren (1) of paden (0) te tekenen. Rechtermuisknop wist een vakje.</p>
+
+        <div class="flex justify-center mb-4 space-x-4">
+            <button id="reset-btn" class="tool-button">Leegmaken</button>
+            <button id="copy-btn" class="tool-button bg-green-700 hover:bg-green-600 border-green-500">Kopieer Level Data</button>
+        </div>
+
+        <canvas id="levelCanvas" class="mx-auto"></canvas>
+
+        <div id="notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 pointer-events-none">
+            Level data gekopieerd!
+        </div>
+    </div>
+    
+    <!-- Verborgen textarea voor het kopieer-mechanisme -->
+    <textarea id="output" class="absolute -left-full"></textarea>
+
+    <script>
+        const canvas = document.getElementById('levelCanvas');
+        const ctx = canvas.getContext('2d');
+        const copyBtn = document.getElementById('copy-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const notification = document.getElementById('notification');
+        const outputArea = document.getElementById('output');
+
+        // Grid-instellingen (moeten overeenkomen met het spel)
+        const MAZE_COLS = 20;
+        const MAZE_ROWS = 15;
+        const TILE_SIZE = 30; // Grootte voor de ontwerper
+
+        canvas.width = MAZE_COLS * TILE_SIZE;
+        canvas.height = MAZE_ROWS * TILE_SIZE;
+
+        let mazeData = [];
+        let isDrawing = false;
+        
+        function initializeGrid() {
+            mazeData = Array(MAZE_ROWS).fill().map(() => Array(MAZE_COLS).fill(0));
+            // Maak een buitenrand van muren
+            for (let r = 0; r < MAZE_ROWS; r++) {
+                for (let c = 0; c < MAZE_COLS; c++) {
+                    if (r === 0 || r === MAZE_ROWS - 1 || c === 0 || c === MAZE_COLS - 1) {
+                        mazeData[r][c] = 1;
+                    }
+                }
+            }
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let r = 0; r < MAZE_ROWS; r++) {
+                for (let c = 0; c < MAZE_COLS; c++) {
+                    // Teken de celkleur
+                    ctx.fillStyle = mazeData[r][c] === 1 ? '#00008B' : '#000'; // Muur = Blauw, Pad = Zwart
+                    ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+                    // Teken de gridlijnen
+                    ctx.strokeStyle = '#4a5568'; // Donkergrijs
+                    ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+        
+        function handleDraw(e, isRightClick = false) {
+            const pos = getMousePos(e);
+            const col = Math.floor(pos.x / TILE_SIZE);
+            const row = Math.floor(pos.y / TILE_SIZE);
+
+            if (row >= 0 && row < MAZE_ROWS && col >= 0 && col < MAZE_COLS) {
+                 // Linkermuisknop tekent muren, rechtermuisknop wist (maakt paden)
+                mazeData[row][col] = isRightClick ? 0 : 1;
+                drawGrid();
+            }
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            e.preventDefault();
+            isDrawing = true;
+            handleDraw(e, e.button === 2); // e.button === 2 is de rechtermuisknop
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            if (isDrawing) {
+                e.preventDefault();
+                handleDraw(e, e.buttons === 2); // e.buttons === 2 voor draggen met rechtermuisknop
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        // Voorkom dat het contextmenu verschijnt bij rechtermuisklik
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+
+        copyBtn.addEventListener('click', () => {
+            let outputString = '[\n';
+            mazeData.forEach((row, index) => {
+                outputString += `    [${row.join(',')}],${index === mazeData.length - 1 ? '' : '\n'}`;
+            });
+            outputString += '\n]';
+            
+            outputArea.value = outputString;
+            outputArea.select();
+            
+            try {
+                // Gebruik document.execCommand voor betere compatibiliteit in iframes
+                document.execCommand('copy');
+                notification.classList.remove('opacity-0');
+                setTimeout(() => {
+                    notification.classList.add('opacity-0');
+                }, 2000);
+            } catch (err) {
+                console.error('Kon niet naar klembord kopiëren: ', err);
+                alert('Kon niet naar klembord kopiëren. Kopieer de data handmatig.');
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Weet je zeker dat je het hele level wilt leegmaken?')) {
+                initializeGrid();
+                drawGrid();
+            }
+        });
+
+        // Initialiseer de ontwerper
+        initializeGrid();
+        drawGrid();
+    </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+[
+  {
+    "LT": "mensa",
+    "NL": "tafel",
+    "GT": "mensae",
+    "GS": "v",
+    "WS": "substantief"
+  },
+  {
+    "LT": "sella",
+    "NL": "stoel",
+    "GT": "sellae",
+    "GS": "v",
+    "WS": "substantief"
+  },
+  {
+    "LT": "liber",
+    "NL": "boek",
+    "GT": "libri",
+    "GS": "m",
+    "WS": "substantief"
+  },
+  {
+    "LT": "gladius",
+    "NL": "zwaard",
+    "GT": "gladii",
+    "GS": "m",
+    "WS": "substantief"
+  },
+  {
+    "LT": "domus",
+    "NL": "huis",
+    "GT": "domus",
+    "GS": "v",
+    "WS": "substantief"
+  },
+  {
+    "LT": "amare",
+    "NL": "liefhebben",
+    "WS": "werkwoord"
+  },
+  {
+    "LT": "videre",
+    "NL": "zien",
+    "WS": "werkwoord"
+  },
+  {
+    "LT": "et",
+    "NL": "en",
+    "WS": "voegwoord"
+  },
+  {
+    "LT": "non",
+    "NL": "niet",
+    "WS": "bijwoord"
+  }
+]

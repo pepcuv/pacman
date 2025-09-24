@@ -1,0 +1,32 @@
+[
+  {
+    "LT": "canis",
+    "NL": "hond",
+    "GT": "canis",
+    "GS": "m"
+  },
+  {
+    "LT": "feles",
+    "NL": "kat",
+    "GT": "felis",
+    "GS": "v"
+  },
+  {
+    "LT": "equus",
+    "NL": "paard",
+    "GT": "equi",
+    "GS": "m"
+  },
+  {
+    "LT": "avis",
+    "NL": "vogel",
+    "GT": "avis",
+    "GS": "v"
+  },
+  {
+    "LT": "piscis",
+    "NL": "vis",
+    "GT": "piscis",
+    "GS": "m"
+  }
+]

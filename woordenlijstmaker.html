@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woorden.json Bouwer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cinzel', serif;
+            background-color: #1a202c;
+            color: #f7fafc;
+        }
+        .action-button {
+            background-color: #4a5568;
+            border: 2px solid #a0aec0;
+            transition: all 0.2s ease-in-out;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+        }
+        .action-button:hover {
+            background-color: #718096;
+            border-color: #cbd5e0;
+        }
+        input[type="text"] {
+            background-color: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            color: #f7fafc;
+            width: 100%;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #a0aec0;
+        }
+        .delete-btn {
+            background-color: #c53030;
+            color: white;
+            border-radius: 9999px;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid #f56565;
+            transition: background-color 0.2s;
+        }
+        .delete-btn:hover {
+            background-color: #e53e3e;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl text-center mb-2 text-yellow-300">Woorden Bouwer</h1>
+        <p class="text-center text-gray-400 mb-8">Voeg woorden toe en download het JSON-bestand voor je spel.</p>
+
+        <!-- Acties -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-gray-800 rounded-lg mb-6 sticky top-4 z-10 shadow-lg">
+            <div class="flex items-center gap-2">
+                <label for="filename" class="font-bold">Bestandsnaam:</label>
+                <input type="text" id="filename" placeholder="bijv. nieuwe_woorden" value="woorden" class="w-48">
+                <span class="text-gray-400">.json</span>
+            </div>
+            <div class="flex gap-4">
+                <button id="add-row-btn-top" class="action-button">+ Rij Toevoegen</button>
+                <button id="download-btn" class="action-button bg-green-700 hover:bg-green-600 border-green-500">Download JSON</button>
+            </div>
+        </div>
+
+        <!-- Woorden container -->
+        <div id="words-container" class="space-y-4">
+            <!-- Header Row -->
+            <div class="hidden md:grid grid-cols-[1fr,1fr,1fr,1fr,1fr,auto] gap-4 items-center text-center font-bold text-yellow-300">
+                <span>Latijn (LT)</span>
+                <span>Nederlands (NL)</span>
+                <span>Genitief (GT)</span>
+                <span>Geslacht (GS)</span>
+                <span>Woordsoort (WS)</span>
+                <span class="w-8"></span>
+            </div>
+            <!-- Rijen worden hier dynamisch toegevoegd -->
+        </div>
+
+        <!-- Knop onderaan -->
+        <div class="mt-6 text-center">
+            <button id="add-row-btn-bottom" class="action-button">+ Rij Toevoegen</button>
+        </div>
+    </div>
+
+    <script>
+        const wordsContainer = document.getElementById('words-container');
+        const addRowBtnTop = document.getElementById('add-row-btn-top');
+        const addRowBtnBottom = document.getElementById('add-row-btn-bottom');
+        const downloadBtn = document.getElementById('download-btn');
+        const filenameInput = document.getElementById('filename');
+
+        // Definieer de kolommen en hun bijbehorende afkortingen
+        const columns = [
+            { id: 'latin', label: 'Latijn (LT)', placeholder: 'Latijn (verplicht)', key: 'LT' },
+            { id: 'nederlands', label: 'Nederlands (NL)', placeholder: 'Nederlands (verplicht)', key: 'NL' },
+            { id: 'genitief', label: 'Genitief (GT)', placeholder: 'Genitief', key: 'GT' },
+            { id: 'geslacht', label: 'Geslacht (GS)', placeholder: 'Geslacht (m/v/o)', key: 'GS' },
+            { id: 'woordsoort', label: 'Woordsoort (WS)', placeholder: 'Woordsoort', key: 'WS' }
+        ];
+
+        function createWordRow() {
+            const row = document.createElement('div');
+            row.className = 'grid grid-cols-1 md:grid-cols-[1fr,1fr,1fr,1fr,1fr,auto] gap-4 items-center p-4 bg-gray-900 rounded-lg word-row';
+
+            columns.forEach(col => {
+                const wrapper = document.createElement('div');
+                
+                // Label voor mobiele weergave
+                const label = document.createElement('label');
+                label.className = 'md:hidden text-sm text-yellow-300 mb-1 block';
+                label.textContent = col.label;
+                wrapper.appendChild(label);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = col.placeholder;
+                input.dataset.key = col.id; // Gebruik de volledige naam als data-key
+                wrapper.appendChild(input);
+                row.appendChild(wrapper);
+            });
+
+            const deleteBtnWrapper = document.createElement('div');
+            deleteBtnWrapper.className = 'flex md:mt-5 justify-end'; // Zorgt voor juiste uitlijning
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = 'X';
+            deleteBtn.onclick = () => row.remove();
+            deleteBtnWrapper.appendChild(deleteBtn);
+            row.appendChild(deleteBtnWrapper);
+
+            wordsContainer.appendChild(row);
+        }
+
+        function generateJSON() {
+            const allRows = document.querySelectorAll('.word-row');
+            const wordsArray = [];
+
+            allRows.forEach(row => {
+                const inputs = row.querySelectorAll('input[type="text"]');
+                const wordObject = {};
+                let hasRequiredFields = true;
+                
+                const latinInput = row.querySelector('input[data-key="latin"]');
+                const nederlandsInput = row.querySelector('input[data-key="nederlands"]');
+
+                if (!latinInput.value.trim() || !nederlandsInput.value.trim()) {
+                    hasRequiredFields = false;
+                }
+
+                if (hasRequiredFields) {
+                     inputs.forEach(input => {
+                        const value = input.value.trim();
+                        if (value) {
+                            const columnInfo = columns.find(c => c.id === input.dataset.key);
+                            if (columnInfo) {
+                                wordObject[columnInfo.key] = value;
+                            }
+                        }
+                    });
+                    wordsArray.push(wordObject);
+                }
+            });
+
+            if (wordsArray.length === 0) {
+                alert('Voeg minstens één volledig woord toe (Latijn en Nederlands zijn verplicht).');
+                return null;
+            }
+
+            return JSON.stringify(wordsArray, null, 2); // 2 spaties voor inspringing
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            const jsonString = generateJSON();
+            if (!jsonString) return;
+
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            let filename = filenameInput.value.trim() || 'woorden';
+            if (!filename.endsWith('.json')) {
+                filename += '.json';
+            }
+            
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+        
+        // Event listener voor 'Enter' om een nieuwe rij toe te voegen
+        wordsContainer.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+
+            const targetInput = e.target;
+            if (targetInput.tagName !== 'INPUT') return;
+
+            const currentRow = targetInput.closest('.word-row');
+            const allRows = Array.from(wordsContainer.querySelectorAll('.word-row'));
+            const lastRow = allRows[allRows.length - 1];
+
+            // Voeg alleen een nieuwe rij toe als 'Enter' wordt ingedrukt in de laatste rij
+            if (currentRow === lastRow) {
+                e.preventDefault();
+                createWordRow();
+                // Focus op het eerste input-veld van de zojuist toegevoegde rij
+                const newLastRow = wordsContainer.querySelector('.word-row:last-child');
+                if (newLastRow) {
+                    newLastRow.querySelector('input').focus();
+                }
+            }
+        });
+
+        addRowBtnTop.addEventListener('click', createWordRow);
+        addRowBtnBottom.addEventListener('click', createWordRow);
+
+        // Start met een paar lege rijen
+        createWordRow();
+        createWordRow();
+        createWordRow();
+    </script>
+</body>
+</html>
+

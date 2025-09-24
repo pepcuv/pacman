@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pac-Man: Latijnse Woordenschat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.3.3/Tone.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Cinzel", serif;
+        background-color: #1a202c;
+        color: #f7fafc;
+        overflow: hidden;
+        touch-action: none; /* Voorkom scrollen op mobiel */
+      }
+      .menu-button {
+        background-color: #4a5568;
+        border: 2px solid #a0aec0;
+        transition: all 0.2s ease-in-out;
+        padding: 0.75rem 1.5rem;
+        font-size: 1.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+      }
+      .menu-button:hover {
+        background-color: #718096;
+        border-color: #cbd5e0;
+        transform: scale(1.05);
+      }
+      .game-screen {
+        background-image: url("https://www.transparenttextures.com/patterns/dark-mosaic.png");
+      }
+      canvas {
+        background-color: #000;
+        border: 4px solid #a0aec0;
+        border-radius: 8px;
+        box-shadow: 0 0 20px rgba(192, 192, 225, 0.4);
+      }
+      #question-modal,
+      #flashcard-modal {
+        /* Shared styles */
+        border: 2px solid #a0aec0;
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+      }
+      #question-modal {
+        /* Specific background for question modal */
+        background-color: rgba(26, 32, 44, 0.95);
+      }
+      #touch-controls {
+        display: none; /* Standaard verborgen, wordt getoond op touch-apparaten */
+      }
+      @media (hover: none) and (pointer: coarse) {
+        #touch-controls {
+          display: grid;
+        }
+      }
+      .touch-button {
+        background-color: rgba(74, 85, 104, 0.8);
+        border: 2px solid #a0aec0;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: white;
+        user-select: none;
+      }
+      .feedback-animation {
+        position: absolute;
+        font-size: 1.5rem;
+        font-weight: bold;
+        animation: float-up 1.5s ease-out forwards;
+        pointer-events: none;
+        text-shadow: 1px 1px 2px black;
+      }
+      @keyframes float-up {
+        from {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateY(-50px);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="flex items-center justify-center h-screen game-screen">
+    <!-- Schermen -->
+    <div id="main-menu" class="text-center space-y-6">
+      <h1 class="text-6xl font-bold text-yellow-300 drop-shadow-lg">
+        LATIN VS PAC-MAN
+      </h1>
+      <div class="flex flex-col space-y-4">
+        <button id="start-game-btn" class="menu-button">Start Spel</button>
+        <button id="highscores-btn" class="menu-button">Highscores</button>
+        <button id="exit-btn" class="menu-button">Afsluiten</button>
+      </div>
+    </div>
+
+    <div
+      id="level-select-screen"
+      class="hidden text-center p-8 bg-gray-800 rounded-lg shadow-2xl"
+    >
+      <h2 class="text-4xl mb-6 text-yellow-300">Selecteer Woordenlijsten</h2>
+      <div
+        id="word-lists"
+        class="space-y-3 text-left max-h-64 overflow-y-auto p-4 border-2 border-gray-600 rounded"
+      >
+        <p id="loading-text">Woordenlijsten laden...</p>
+      </div>
+      <button id="select-question-types-btn" class="menu-button mt-6 w-full">
+        Volgende
+      </button>
+      <button id="back-to-menu-btn" class="menu-button mt-2 w-full bg-gray-600">
+        Terug
+      </button>
+    </div>
+
+    <div
+      id="question-type-select-screen"
+      class="hidden text-center p-8 bg-gray-800 rounded-lg shadow-2xl"
+    >
+      <h2 class="text-4xl mb-6 text-yellow-300">Wat wil je oefenen?</h2>
+      <div
+        id="question-types"
+        class="space-y-3 text-left max-h-64 overflow-y-auto p-4 border-2 border-gray-600 rounded"
+      >
+        <!-- Dynamische checkboxes voor vraagtypes -->
+      </div>
+      <div class="mt-6">
+        <label
+          class="flex items-center justify-center space-x-3 p-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600"
+        >
+          <input
+            type="checkbox"
+            id="flashcard-checkbox"
+            class="form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500"
+          />
+          <span>Toon flitskaart na antwoord</span>
+        </label>
+      </div>
+      <button id="start-game-final-btn" class="menu-button mt-6 w-full">
+        Start Spel!
+      </button>
+      <button
+        id="back-to-level-select-btn"
+        class="menu-button mt-2 w-full bg-gray-600"
+      >
+        Terug
+      </button>
+    </div>
+
+    <div id="game-container" class="hidden flex-col items-center ">
+      <div
+        class="w-full max-w-4xl flex justify-between items-center p-2 text-2xl mb-2"
+      >
+        <div class="relative">Score: <span id="score">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+        <div
+          id="lives-display"
+          class="relative flex items-center text-3xl"
+        ></div>
+        <div class="relative">Tijd: <span id="timer">60</span></div>
+      </div>
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+      <div id="touch-controls" class="grid grid-cols-3 gap-2 mt-4 w-48">
+        <div></div>
+        <button class="touch-button" id="touch-up">▲</button>
+        <div></div>
+        <button class="touch-button" id="touch-left">◄</button>
+        <div></div>
+        <button class="touch-button" id="touch-right">►</button>
+        <div></div>
+        <button class="touch-button" id="touch-down">▼</button>
+        <div></div>
+      </div>
+    </div>
+
+    <div
+      id="question-modal"
+      class="hidden absolute p-8 rounded-lg text-center w-11/12 max-w-md"
+    >
+      <h3 id="question-prompt" class="text-2xl mb-6 leading-relaxed"></h3>
+      <form id="answer-form">
+        <input
+          type="text"
+          id="answer-input"
+          class="w-full p-2 rounded bg-gray-700 border-2 border-gray-500 text-white text-center text-xl focus:outline-none focus:border-yellow-400"
+          autocomplete="off"
+        />
+        <button type="submit" class="menu-button mt-4 w-full">Antwoord</button>
+      </form>
+      <div
+        id="feedback"
+        class="mt-4 text-4xl min-h-[7rem] flex flex-col justify-center items-center"
+      ></div>
+    </div>
+
+    <div
+      id="flashcard-modal"
+      class="hidden absolute p-6 rounded-lg text-left w-11/12 max-w-md flex flex-col items-center"
+    >
+      <h3 id="flashcard-title" class="text-4xl font-bold mb-4 text-center"></h3>
+      <div
+        id="flashcard-content"
+        class="text-xl space-y-2 w-full bg-black bg-opacity-20 p-4 rounded"
+      >
+        <!-- Flitskaart key-value paren -->
+      </div>
+      <button id="flashcard-continue-btn" class="menu-button mt-6 w-full">
+        Verder
+      </button>
+    </div>
+
+
+    <div id="pause-screen" class="hidden absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-50">
+    <h2 class="text-6xl text-yellow-300 mb-6">Gepauzeerd</h2>
+    <button id="resume-btn" class="menu-button">Hervatten</button>
+</div>
+
+
+
+    <div id="game-over-screen" class="hidden text-center">
+      <h2 class="text-6xl text-red-500 mb-4">Game Over</h2>
+      <p class="text-3xl mb-6">
+        Eindscore: <span id="final-score-gameover">0</span>
+      </p>
+      <button id="restart-game-btn" class="menu-button">Terug naar menu</button>
+    </div>
+
+    <div id="victory-screen" class="hidden text-center">
+      <h2 class="text-6xl text-green-400 mb-4">Gefeliciteerd!</h2>
+      <p class="text-3xl mb-6">Je hebt alle levels voltooid!</p>
+      <p class="text-3xl mb-6">
+        Eindscore: <span id="final-score-victory">0</span>
+      </p>
+      <button id="restart-victory-btn" class="menu-button">
+        Terug naar menu
+      </button>
+    </div>
+
+    <div
+      id="highscore-screen"
+      class="hidden p-8 bg-gray-800 rounded-lg shadow-2xl w-11/12 max-w-lg"
+    >
+      <h2 class="text-4xl mb-6 text-yellow-300 text-center">
+        Top 10 Highscores
+      </h2>
+      <ol
+        id="highscore-list"
+        class="list-decimal list-inside space-y-2 text-xl"
+      >
+        <!-- Highscores -->
+      </ol>
+      <button id="back-to-menu-from-hs-btn" class="menu-button mt-6 w-full">
+        Terug naar menu
+      </button>
+    </div>
+
+    <script>
+      window.addEventListener("load", async () => {
+        // =================================================================
+        // --- SPELCONFIGURATIE ---
+        // =================================================================
+        const gameConfig = {
+          initialTime: 16,
+          initialLives: 3,
+          pointsCorrect: 100,
+          timeBonusCorrect: 5,
+          pointsIncorrect: -50,
+          timePenaltyIncorrect: -8,
+          levelClearTimeBonusMultiplier: 5,
+          invincibilityDuration: 1500,
+          playerSpeed: 3,
+          baseEnemySpeed: 2,
+          enemySpeedIncreasePerLevel: 0.1,
+          startLevel: 1,
+        };
+
+        const keyMap = {
+          nederlands: ["Nederlands", "Vertaal:"],
+          genitief: ["Genitief", "Wat is de genitief van:"],
+          geslacht: ["Geslacht (m/v/o)", "Wat is het geslacht van:"],
+          woordsoort: ["Woordsoort", "Wat is de woordsoort van:"],
+        };
+
+        const jsonKeyAbbreviations = {
+          NL: "nederlands",
+          GT: "genitief",
+          GS: "geslacht",
+          WS: "woordsoort",
+          LT: "latin",
+        };
+
+        // --- Initialisatie ---
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const allScreens = {
+          mainMenu: document.getElementById("main-menu"),
+          levelSelectScreen: document.getElementById("level-select-screen"),
+          questionTypeSelectScreen: document.getElementById(
+            "question-type-select-screen"
+          ),
+          gameContainer: document.getElementById("game-container"),
+          gameOverScreen: document.getElementById("game-over-screen"),
+          victoryScreen: document.getElementById("victory-screen"),
+          highscoreScreen: document.getElementById("highscore-screen"),
+          questionModal: document.getElementById("question-modal"),
+          flashcardModal: document.getElementById("flashcard-modal"),
+          pauseScreen: document.getElementById('pause-screen')
+        };
+        const scoreDisplay = document.getElementById("score"),
+          levelDisplay = document.getElementById("level"),
+          timerDisplay = document.getElementById("timer"),
+          livesDisplay = document.getElementById("lives-display"),
+          questionPrompt = document.getElementById("question-prompt"),
+          answerForm = document.getElementById("answer-form"),
+          answerInput = document.getElementById("answer-input"),
+          feedbackDisplay = document.getElementById("feedback"),
+          finalScoreGameover = document.getElementById("final-score-gameover"),
+          finalScoreVictory = document.getElementById("final-score-victory"),
+          flashcardTitle = document.getElementById("flashcard-title"),
+          flashcardContent = document.getElementById("flashcard-content");
+
+        // Geluid
+        const synth = new Tone.Synth().toDestination();
+        const correctSound = () => {
+          if (Tone.context.state !== "running") return;
+          synth.triggerAttackRelease("C5", "8n", Tone.now());
+          synth.triggerAttackRelease("G5", "8n", Tone.now() + 0.1);
+        };
+        const incorrectSound = () => {
+          if (Tone.context.state !== "running") return;
+          synth.triggerAttackRelease("C3", "8n");
+        };
+        const collisionSound = () => {
+          if (Tone.context.state !== "running") return;
+          synth.triggerAttackRelease("F#2", "8n");
+        };
+        const collectSound = () => {
+          if (Tone.context.state !== "running") return;
+          synth.triggerAttackRelease("A4", "16n");
+        };
+
+        // Spelerimage
+
+        const playerImage = new Image();
+        playerImage.src = "romein.png"; // De naam van je afbeeldingsbestand
+        let playerImageLoaded = false;
+        playerImage.onload = () => {
+          playerImageLoaded = true;
+        };
+
+        // Woordenlijsten
+        const wordlistFilenames = [
+          { file: "woorden1.json", name: "Eerste woordenlijst" },
+          { file: "woorden2.json", name: "Tweede woordenlijst" },
+        ];
+        let wordDatabases = {};
+
+        async function loadWordLists() {
+          const reverseAbbrMap = Object.fromEntries(
+            Object.entries(jsonKeyAbbreviations).map(([abbr, full]) => [
+              full,
+              abbr,
+            ])
+          );
+          for (const list of wordlistFilenames) {
+            try {
+              const response = await fetch(`./woorden/${list.file}`);
+              if (!response.ok)
+                throw new Error(`HTTP error! status: ${response.status}`);
+              const data = await response.json();
+              wordDatabases[list.name] = data.map((wordObj) => {
+                const newWordObj = {};
+                for (const key in wordObj) {
+                  const newKey = jsonKeyAbbreviations[key.toUpperCase()] || key;
+                  newWordObj[newKey] = wordObj[key];
+                }
+                return newWordObj;
+              });
+            } catch (error) {
+              console.error(`Kon woordenlijst niet laden: ${list.file}`, error);
+            }
+          }
+        }
+
+        // Doolhoven (onveranderd)
+        const TILE_SIZE = 40;
+        const MAZE_COLS = canvas.width / TILE_SIZE;
+        const MAZE_ROWS = canvas.height / TILE_SIZE;
+        const mazeLayouts = [
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
+            [1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+            [1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+            [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+
+          [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+            [1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          ],
+        ];
+
+        // --- Game State ---
+        let score,
+          currentLevel,
+          timer,
+          lives,
+          timerInterval,
+          activeWords,
+          isPaused,
+          isInvincible,
+          gameLoopId;
+        let currentQuestionWord, currentQuestionType;
+        let selectedQuestionTypes = [],
+          showFlashcard = false;
+        let highscores =
+          JSON.parse(localStorage.getItem("latinPacmanHighscores")) || [];
+        let player, enemies, collectibles;
+        const romanCollectibles = [
+          "🏺",
+          "📜",
+          "🏛️",
+          "🛡️",
+          "🗡️",
+          "🍇",
+          "🍷",
+          "👑",
+          "⚱️",
+          "⚔️",
+        ];
+
+        // --- Entiteiten ---
+        class Entity {
+          constructor(x, y, size, speed) {
+            this.x = x;
+            this.y = y;
+            this.size = size;
+            this.speed = speed;
+          }
+          draw(emoji) {
+            ctx.font = `${this.size}px serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(emoji, this.x + this.size / 2, this.y + this.size / 2);
+          }
+        }
+
+        class Player extends Entity {
+          constructor(x, y, size, speed) {
+            super(x, y, size, speed);
+            this.dx = 0;
+            this.dy = 0;
+            this.nextDx = 0;
+            this.nextDy = 0;
+            this.direction = "right";
+          }
+          update() {
+            if (this.nextDx !== 0 || this.nextDy !== 0) {
+              if (
+                !this.collidesWithWall(
+                  this.x + this.nextDx,
+                  this.y + this.nextDy
+                )
+              ) {
+                this.dx = this.nextDx;
+                this.dy = this.nextDy;
+                this.nextDx = 0;
+                this.nextDy = 0;
+              }
+            }
+            const newX = this.x + this.dx;
+            const newY = this.y + this.dy;
+            if (!this.collidesWithWall(newX, newY)) {
+              this.x = newX;
+              this.y = newY;
+            } else {
+              this.dx = 0;
+              this.dy = 0;
+            }
+            if (this.x < -this.size) this.x = canvas.width;
+            if (this.x > canvas.width) this.x = -this.size;
+          }
+          collidesWithWall(x, y) {
+            const corners = [
+              { x: x, y: y },
+              { x: x + this.size - 1, y: y },
+              { x: x, y: y + this.size - 1 },
+              { x: x + this.size - 1, y: y + this.size - 1 },
+            ];
+            for (const corner of corners) {
+              const col = Math.floor(corner.x / TILE_SIZE);
+              const row = Math.floor(corner.y / TILE_SIZE);
+              const layout = mazeLayouts[currentLevel - 1];
+              if (layout[row] && layout[row][col] === 1) {
+                return true;
+              }
+            }
+            return false;
+          }
+          draw() {
+            if (!playerImageLoaded) {
+              ctx.fillStyle = "yellow";
+              ctx.fillRect(this.x, this.y, this.size, this.size);
+              return;
+            }
+
+            ctx.save(); // Sla de huidige staat van het canvas op (niet-gespiegeld)
+            try {
+              if (this.direction === "left") {
+                // Spiegel het canvas horizontaal
+                ctx.scale(-1, 1);
+                // Teken de afbeelding op de gespiegelde positie
+                ctx.drawImage(
+                  playerImage,
+                  -this.x - this.size,
+                  this.y,
+                  this.size,
+                  this.size
+                );
+              } else {
+                // Teken de afbeelding normaal
+                ctx.drawImage(
+                  playerImage,
+                  this.x,
+                  this.y,
+                  this.size,
+                  this.size
+                );
+              }
+            } finally {
+              ctx.restore(); // Herstel de canvas staat, zodat de rest niet gespiegeld is
+            }
+          }
+        }
+
+        class Enemy extends Entity {
+          constructor(x, y, size, speed) {
+            super(x, y, size, speed);
+            this.dx = speed;
+            this.dy = 0;
+          }
+          update() {
+            const newX = this.x + this.dx;
+            const newY = this.y + this.dy;
+            if (this.collidesWithWall(newX, newY) || Math.random() < 0.02) {
+              const directions = [
+                { dx: this.speed, dy: 0 },
+                { dx: -this.speed, dy: 0 },
+                { dx: 0, dy: this.speed },
+                { dx: 0, dy: -this.speed },
+              ].filter((dir) => !(dir.dx === -this.dx && dir.dy === -this.dy));
+              const newDir =
+                directions[Math.floor(Math.random() * directions.length)];
+              this.dx = newDir.dx;
+              this.dy = newDir.dy;
+            } else {
+              this.x = newX;
+              this.y = newY;
+            }
+            if (this.x < -this.size) this.x = canvas.width;
+            if (this.x > canvas.width) this.x = -this.size;
+          }
+          collidesWithWall(x, y) {
+            const col = Math.floor((x + this.size / 2) / TILE_SIZE);
+            const row = Math.floor((y + this.size / 2) / TILE_SIZE);
+            const layout = mazeLayouts[currentLevel - 1];
+            return layout[row] && layout[row][col] === 1;
+          }
+        }
+
+        // --- Game Flow ---
+        function switchScreen(screenKey) {
+          Object.values(allScreens).forEach((s) => s.classList.add("hidden"));
+          allScreens[screenKey].classList.remove("hidden");
+        }
+
+        function populateWordLists() {
+          const container = document.getElementById("word-lists");
+          container.innerHTML = "";
+          if (Object.keys(wordDatabases).length === 0) {
+            container.innerHTML =
+              '<p class="text-red-400">Kon geen woordenlijsten laden.</p>';
+            return;
+          }
+          Object.keys(wordDatabases).forEach((listName) => {
+            const label = document.createElement("label");
+            label.className =
+              "flex items-center space-x-3 p-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = listName;
+            checkbox.className =
+              "form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500";
+            label.appendChild(checkbox);
+            const span = document.createElement("span");
+            span.textContent = listName;
+            label.appendChild(span);
+            container.appendChild(label);
+          });
+        }
+
+        function populateQuestionTypes() {
+          const selectedLists = Array.from(
+            document.querySelectorAll("#word-lists input:checked")
+          ).map((cb) => cb.value);
+          if (selectedLists.length === 0) {
+            alert("Selecteer minstens één woordenlijst!");
+            return;
+          }
+          activeWords = selectedLists.flatMap(
+            (listName) => wordDatabases[listName]
+          );
+
+          const availableKeys = new Set();
+          activeWords.forEach((word) => {
+            Object.keys(word).forEach((key) => {
+              if (keyMap[key]) availableKeys.add(key);
+            });
+          });
+
+          const container = document.getElementById("question-types");
+          container.innerHTML = "";
+          if (availableKeys.size === 0) {
+            container.innerHTML =
+              "<p>Geen oefenbare onderwerpen gevonden in de selectie.</p>";
+            return;
+          }
+
+          availableKeys.forEach((key) => {
+            const label = document.createElement("label");
+            label.className =
+              "flex items-center space-x-3 p-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = key;
+            checkbox.checked = true;
+            checkbox.className =
+              "form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500";
+            label.appendChild(checkbox);
+            const span = document.createElement("span");
+            span.textContent = keyMap[key][0];
+            label.appendChild(span);
+            container.appendChild(label);
+          });
+          switchScreen("questionTypeSelectScreen");
+        }
+
+        function initGame() {
+          selectedQuestionTypes = Array.from(
+            document.querySelectorAll("#question-types input:checked")
+          ).map((cb) => cb.value);
+          if (selectedQuestionTypes.length === 0) {
+            alert("Selecteer minstens één onderwerp om te oefenen!");
+            return;
+          }
+          showFlashcard = document.getElementById("flashcard-checkbox").checked;
+
+          score = 0;
+          currentLevel = gameConfig.startLevel;
+          timer = gameConfig.initialTime;
+          lives = gameConfig.initialLives;
+          isPaused = false;
+          isInvincible = false;
+
+          switchScreen("gameContainer");
+          startLevel();
+        }
+
+        function startLevel() {
+          isPaused = false;
+          timer = gameConfig.initialTime;
+          updateUI();
+          setupLevelEntities();
+          if (timerInterval) clearInterval(timerInterval);
+          timerInterval = setInterval(() => {
+            if (!isPaused) {
+              timer--;
+              updateUI();
+              if (timer <= 0) {
+                timer = 0;
+                updateUI();
+                endGame("gameover");
+              }
+            }
+          }, 1000);
+          if (gameLoopId) cancelAnimationFrame(gameLoopId);
+          gameLoop();
+        }
+
+        function setupLevelEntities() {
+          const layout = mazeLayouts[currentLevel - 1];
+          player = new Player(
+            1 * TILE_SIZE,
+            1 * TILE_SIZE,
+            TILE_SIZE * 0.8,
+            gameConfig.playerSpeed
+          );
+          enemies = [];
+          const enemyCount = Math.min(
+            4,
+            2 + Math.floor((currentLevel - 1) / 2)
+          );
+          const enemyPositions = [
+            { r: 1, c: MAZE_COLS - 2 },
+            { r: MAZE_ROWS - 2, c: 1 },
+            { r: MAZE_ROWS - 2, c: MAZE_COLS - 2 },
+            { r: 7, c: 10 },
+          ];
+          for (let i = 0; i < enemyCount; i++) {
+            const pos = enemyPositions[i % enemyPositions.length];
+            const enemySpeed =
+              gameConfig.baseEnemySpeed +
+              (currentLevel - 1) * gameConfig.enemySpeedIncreasePerLevel;
+            enemies.push(
+              new Enemy(
+                pos.c * TILE_SIZE,
+                pos.r * TILE_SIZE,
+                TILE_SIZE * 0.9,
+                enemySpeed
+              )
+            );
+          }
+          collectibles = [];
+          const availableTiles = [];
+          layout.forEach((row, r) =>
+            row.forEach((cell, c) => {
+              if (cell === 0) availableTiles.push({ r, c });
+            })
+          );
+          for (let i = 0; i < 10; i++) {
+            if (availableTiles.length > 0) {
+              const randomIndex = Math.floor(
+                Math.random() * availableTiles.length
+              );
+              const tile = availableTiles.splice(randomIndex, 1)[0];
+              collectibles.push({
+                x: tile.c * TILE_SIZE,
+                y: tile.r * TILE_SIZE,
+                size: TILE_SIZE * 0.7,
+                emoji: romanCollectibles[i % romanCollectibles.length],
+              });
+            }
+          }
+        }
+
+        function nextLevel() {
+          score += gameConfig.levelClearTimeBonusMultiplier * timer;
+          currentLevel++;
+          if (currentLevel > mazeLayouts.length) endGame("victory");
+          else startLevel();
+        }
+
+        function endGame(reason) {
+          isPaused = true;
+          clearInterval(timerInterval);
+          cancelAnimationFrame(gameLoopId);
+          if (reason === "gameover") {
+            finalScoreGameover.textContent = score;
+            switchScreen("gameOverScreen");
+          } else if (reason === "victory") {
+            finalScoreVictory.textContent = score;
+            switchScreen("victoryScreen");
+          }
+        }
+
+        function gameLoop() {
+          if (isPaused) {
+            gameLoopId = requestAnimationFrame(gameLoop);
+            return;
+          }
+          player.update();
+          enemies.forEach((enemy) => enemy.update());
+          checkCollisions();
+          draw();
+          gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function checkCollisions() {
+          collectibles.forEach((c, i) => {
+            if (
+              Math.hypot(
+                player.x + player.size / 2 - (c.x + c.size / 2),
+                player.y + player.size / 2 - (c.y + c.size / 2)
+              ) <
+              player.size / 2 + c.size / 2
+            ) {
+              collectibles.splice(i, 1);
+              collectSound();
+              askQuestion();
+            }
+          });
+          enemies.forEach((e) => {
+            if (
+              Math.hypot(
+                player.x + player.size / 2 - (e.x + e.size / 2),
+                player.y + player.size / 2 - (e.y + e.size / 2)
+              ) <
+              player.size / 2 + e.size / 2
+            ) {
+              handleEnemyCollision();
+            }
+          });
+        }
+
+        function handleEnemyCollision() {
+          if (isInvincible) return;
+          collisionSound();
+          lives--;
+          isInvincible = true;
+          updateUI();
+          if (lives <= 0) {
+            endGame("gameover");
+            return;
+          }
+          player.x = 1 * TILE_SIZE;
+          player.y = 1 * TILE_SIZE;
+          setTimeout(() => {
+            isInvincible = false;
+          }, gameConfig.invincibilityDuration);
+        }
+
+        function askQuestion() {
+          isPaused = true;
+          const possibleWords = activeWords.filter((word) =>
+            selectedQuestionTypes.some((type) => word.hasOwnProperty(type))
+          );
+          if (possibleWords.length === 0) {
+            console.error(
+              "Geen woorden gevonden met de geselecteerde vraagtypes."
+            );
+            isPaused = false;
+            return;
+          }
+
+          currentQuestionWord =
+            possibleWords[Math.floor(Math.random() * possibleWords.length)];
+          const askableKeys = Object.keys(currentQuestionWord).filter((key) =>
+            selectedQuestionTypes.includes(key)
+          );
+          currentQuestionType =
+            askableKeys[Math.floor(Math.random() * askableKeys.length)];
+
+          questionPrompt.innerHTML = `${keyMap[currentQuestionType][1]}<br><span class="text-4xl font-bold text-yellow-300">${currentQuestionWord.latin}</span>`;
+
+          answerInput.value = "";
+          feedbackDisplay.innerHTML = "";
+          switchScreen("questionModal");
+          answerInput.focus();
+        }
+
+        function handleAnswer(e) {
+          e.preventDefault();
+          const userAnswer = answerInput.value.trim().toLowerCase();
+          const correctAnswer = String(
+            currentQuestionWord[currentQuestionType]
+          ).toLowerCase();
+
+          if (userAnswer === correctAnswer) {
+            score += gameConfig.pointsCorrect;
+            timer += gameConfig.timeBonusCorrect;
+            feedbackDisplay.textContent = "✅";
+            showFeedbackAnimation(
+              scoreDisplay,
+              `+${gameConfig.pointsCorrect}`,
+              "#4ade80"
+            );
+            showFeedbackAnimation(
+              timerDisplay,
+              `+${gameConfig.timeBonusCorrect}s`,
+              "#4ade80"
+            );
+            correctSound();
+          } else {
+            score += gameConfig.pointsIncorrect;
+            if (score < 0) score = 0;
+            timer += gameConfig.timePenaltyIncorrect;
+            lives--;
+            feedbackDisplay.innerHTML = `<span>❌</span><span class="text-lg mt-1 text-center block">${
+              "Correct: " + currentQuestionWord[currentQuestionType]
+            }</span>`;
+            showFeedbackAnimation(
+              scoreDisplay,
+              `${gameConfig.pointsIncorrect}`,
+              "#f87171"
+            );
+            showFeedbackAnimation(
+              timerDisplay,
+              `${gameConfig.timePenaltyIncorrect}s`,
+              "#f87171"
+            );
+            showFeedbackAnimation(livesDisplay, "-1 ❤️", "#f87171");
+            incorrectSound();
+          }
+          updateUI();
+          if (lives <= 0) {
+            setTimeout(() => endGame("gameover"), 1500);
+            return;
+          }
+          if (timer <= 0) {
+            timer = 0;
+            updateUI();
+            endGame("gameover");
+            return;
+          }
+
+          setTimeout(() => {
+            allScreens.questionModal.classList.add("hidden");
+            if (showFlashcard) {
+              showFlashcardModal(currentQuestionWord);
+            } else {
+              resumeGame();
+            }
+          }, 1500);
+        }
+
+        function resumeGame() {
+          // Herstel het spelscherm en verberg alle andere schermen
+          switchScreen("gameContainer");
+
+          // Ga verder met de spellogica
+          if (collectibles.length === 0) {
+            nextLevel();
+          } else {
+            isPaused = false;
+          }
+        }
+
+        function getFlashcardColor(wordObj) {
+          if (wordObj.geslacht === "m") return "bg-blue-800";
+          if (wordObj.geslacht === "v") return "bg-pink-800";
+          if (wordObj.geslacht === "o") return "bg-orange-800";
+          if (wordObj.woordsoort === "werkwoord") return "bg-red-800";
+          if (wordObj.woordsoort === "voegwoord") return "bg-purple-800";
+          if (wordObj.woordsoort === "bijwoord") return "bg-yellow-900"; // bruin
+          return "bg-gray-800";
+        }
+
+        function showFlashcardModal(wordObj) {
+          flashcardTitle.textContent = wordObj.latin;
+          flashcardContent.innerHTML = "";
+          // Don't use switchScreen, just show the modal as an overlay
+          allScreens.flashcardModal.classList.remove("hidden");
+          allScreens.flashcardModal.className =
+            allScreens.flashcardModal.className.replace(/bg-\w+-\d+/g, "");
+          allScreens.flashcardModal.classList.add(getFlashcardColor(wordObj));
+
+          for (const key in keyMap) {
+            if (wordObj.hasOwnProperty(key)) {
+              const p = document.createElement("p");
+              p.innerHTML = `<strong class="text-yellow-300">${keyMap[key][0]}:</strong> ${wordObj[key]}`;
+              flashcardContent.appendChild(p);
+            }
+          }
+        }
+
+        function updateUI() {
+          scoreDisplay.textContent = score;
+          levelDisplay.textContent = currentLevel;
+          timerDisplay.textContent = timer;
+          livesDisplay.innerHTML = "❤️".repeat(lives);
+        }
+        function draw() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drawMaze();
+          drawCollectibles();
+          if (!(isInvincible && Math.floor(Date.now() / 100) % 2 === 0)) {
+            player.draw(); //player.draw("💂");
+          }
+          enemies.forEach((enemy) => enemy.draw("👻"));
+        }
+function drawMaze() {
+    const layout = mazeLayouts[currentLevel - 1];
+    const colors = ['#00008B', '#483D8B', '#008080', '#556B2F', '#8B0000', '#800080', '#4B0082', '#A0522D', '#6A5ACD', '#2F4F4F'];
+    const wallColor = colors[(currentLevel - 1) % colors.length];
+
+    layout.forEach((row, r) => {
+        row.forEach((cell, c) => {
+            if (cell === 1) {
+                const x = c * TILE_SIZE;
+                const y = r * TILE_SIZE;
+
+                // 1. Teken de basiskleur van de steen
+                ctx.fillStyle = wallColor;
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+                // 2. Teken een lichte rand (highlight) bovenaan en links
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // Lichte, semi-transparante kleur
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y + TILE_SIZE);
+                ctx.lineTo(x, y);
+                ctx.lineTo(x + TILE_SIZE, y);
+                ctx.stroke();
+
+                // 3. Teken een donkere rand (schaduw) onderaan en rechts
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'; // Donkere, semi-transparante kleur
+                ctx.beginPath();
+                ctx.moveTo(x, y + TILE_SIZE);
+                ctx.lineTo(x + TILE_SIZE, y + TILE_SIZE);
+                ctx.lineTo(x + TILE_SIZE, y);
+                ctx.stroke();
+            }
+        });
+    });
+}
+
+
+function togglePause() {
+    // Kan alleen pauzeren als het spel actief is en er geen andere vensters open zijn.
+    const gameIsActive = !allScreens.gameContainer.classList.contains('hidden');
+    const isAnyModalOpen = !allScreens.questionModal.classList.contains('hidden') ||
+                           !allScreens.flashcardModal.classList.contains('hidden');
+
+    if (!gameIsActive || isAnyModalOpen) {
+        return; // Doe niets als we niet in het spel zijn of een vraag openstaat.
+    }
+
+    isPaused = !isPaused; // Wissel de pauzestatus
+
+    if (isPaused) {
+        allScreens.pauseScreen.classList.remove('hidden');
+    } else {
+        allScreens.pauseScreen.classList.add('hidden');
+        // Belangrijk: start de gameloop opnieuw als we hervatten
+        requestAnimationFrame(gameLoop); 
+    }
+}
+
+
+        function drawCollectibles() {
+          collectibles.forEach((c) => {
+            ctx.font = `${c.size}px serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(c.emoji, c.x + TILE_SIZE / 2, c.y + TILE_SIZE / 2);
+          });
+        }
+        function showHighscores() {
+          const list = document.getElementById("highscore-list");
+          list.innerHTML = "";
+          highscores.sort((a, b) => b.score - a.score);
+          highscores.slice(0, 10).forEach((entry) => {
+            const li = document.createElement("li");
+            li.textContent = `${entry.name}: ${entry.score}`;
+            list.appendChild(li);
+          });
+          if (highscores.length === 0)
+            list.innerHTML = '<li class="text-gray-400">Nog geen scores.</li>';
+          switchScreen("highscoreScreen");
+        }
+        function checkAndSaveHighscore(finalScore) {
+          const isHighscore =
+            highscores.length < 10 ||
+            finalScore > (highscores[highscores.length - 1]?.score || 0);
+          if (isHighscore) {
+            setTimeout(() => {
+              const name = prompt("Highscore! Voer je naam in:", "Anonymus");
+              if (name) {
+                highscores.push({ name: name, score: finalScore });
+                highscores.sort((a, b) => b.score - a.score);
+                highscores = highscores.slice(0, 10);
+                localStorage.setItem(
+                  "latinPacmanHighscores",
+                  JSON.stringify(highscores)
+                );
+              }
+            }, 100);
+          }
+        }
+        function showFeedbackAnimation(element, text, color) {
+          const el = document.createElement("div");
+          el.textContent = text;
+          el.className = "feedback-animation";
+          el.style.color = color;
+          element.parentElement.appendChild(el);
+          setTimeout(() => el.remove(), 1500);
+        }
+        function setupEventListeners() {
+          document
+            .getElementById("start-game-btn")
+            .addEventListener("click", () => switchScreen("levelSelectScreen"));
+
+            document.getElementById('resume-btn').addEventListener('click', togglePause); 
+
+
+
+            
+          document
+            .getElementById("highscores-btn")
+            .addEventListener("click", showHighscores);
+          document.getElementById("exit-btn").addEventListener("click", () => {
+            if (confirm("Weet je zeker dat je wilt stoppen?")) {
+              switchScreen("mainMenu");
+            }
+          });
+          document
+            .getElementById("select-question-types-btn")
+            .addEventListener("click", populateQuestionTypes);
+          document
+            .getElementById("back-to-menu-btn")
+            .addEventListener("click", () => switchScreen("mainMenu"));
+          document
+            .getElementById("start-game-final-btn")
+            .addEventListener("click", async () => {
+              if (
+                typeof Tone !== "undefined" &&
+                Tone.context.state !== "running"
+              ) {
+                await Tone.start();
+              }
+              initGame();
+            });
+          document
+            .getElementById("back-to-level-select-btn")
+            .addEventListener("click", () => switchScreen("levelSelectScreen"));
+          document
+            .getElementById("restart-game-btn")
+            .addEventListener("click", () => {
+              checkAndSaveHighscore(score);
+              switchScreen("mainMenu");
+            });
+          document
+            .getElementById("restart-victory-btn")
+            .addEventListener("click", () => {
+              checkAndSaveHighscore(score);
+              switchScreen("mainMenu");
+            });
+          document
+            .getElementById("back-to-menu-from-hs-btn")
+            .addEventListener("click", () => switchScreen("mainMenu"));
+          document
+            .getElementById("flashcard-continue-btn")
+            .addEventListener("click", resumeGame);
+          answerForm.addEventListener("submit", handleAnswer);
+    window.addEventListener('keydown', e => {
+        // Pauzeer het spel met Escape
+        if (e.key === 'Escape') {
+            togglePause();
+            return; // Stop verdere uitvoering voor deze toetsaanslag
+        }
+
+        // Speler beweging (alleen als niet gepauzeerd)
+        if (!player || isPaused) return;
+        switch(e.key) {
+            case 'ArrowUp': case 'w': 
+                player.nextDx = 0; player.nextDy = -player.speed; 
+                break;
+            case 'ArrowDown': case 's': 
+                player.nextDx = 0; player.nextDy = player.speed; 
+                break;
+            case 'ArrowLeft': case 'a': 
+                player.nextDx = -player.speed; player.nextDy = 0; 
+                player.direction = 'left';
+                break;
+            case 'ArrowRight': case 'd': 
+                player.nextDx = player.speed; player.nextDy = 0; 
+                player.direction = 'right';
+                break;
+        }
+    });
+          document
+            .getElementById("touch-up")
+            .addEventListener("pointerdown", () => {
+              if (player) {
+                player.nextDx = 0;
+                player.nextDy = -gameConfig.playerSpeed;
+              }
+            });
+          document
+            .getElementById("touch-down")
+            .addEventListener("pointerdown", () => {
+              if (player) {
+                player.nextDx = 0;
+                player.nextDy = gameConfig.playerSpeed;
+              }
+            });
+          document
+            .getElementById("touch-left")
+            .addEventListener("pointerdown", () => {
+              if (player) {
+                player.nextDx = -gameConfig.playerSpeed;
+                player.nextDy = 0;
+              }
+            });
+          document
+            .getElementById("touch-right")
+            .addEventListener("pointerdown", () => {
+              if (player) {
+                player.nextDx = gameConfig.playerSpeed;
+                player.nextDy = 0;
+              }
+            });
+        }
+        function resizeCanvas() {
+          const vw = window.innerWidth,
+            vh = window.innerHeight;
+          const gw = vw * 0.9,
+            gh = vh * 0.7;
+          const scale = Math.min(gw / canvas.width, gh / canvas.height);
+          canvas.style.width = `${canvas.width * scale}px`;
+          canvas.style.height = `${canvas.height * scale}px`;
+        }
+
+        // --- Opstarten ---
+        window.addEventListener("resize", resizeCanvas);
+        setupEventListeners();
+        resizeCanvas();
+        await loadWordLists();
+        populateWordLists();
+        switchScreen("mainMenu");
+      });
+    </script>
+  </body>
+</html>
