@@ -1353,6 +1353,8 @@ function togglePause() {
               if (player) {
                 player.nextDx = -gameConfig.playerSpeed;
                 player.nextDy = 0;
+                                player.direction = 'left';
+
               }
             });
           document
@@ -1361,6 +1363,8 @@ function togglePause() {
               if (player) {
                 player.nextDx = gameConfig.playerSpeed;
                 player.nextDy = 0;
+                                player.direction = 'right';
+
               }
             });
         }
