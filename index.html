@@ -368,51 +368,43 @@
 
         let wordDatabases = {};
 
-        async function loadWordLists() {
-          const reverseAbbrMap = Object.fromEntries(
-            Object.entries(jsonKeyAbbreviations).map(([abbr, full]) => [
-              full,
-              abbr,
-            ])
-          );
+async function loadWordLists() {
+    const urlWords = "https://script.google.com/macros/s/AKfycbz85fmgKj32QQOTCJzgUv2iCpnh7JRrdgRLwmrYdRkaYBMAXYuc9FHtaryg9tLf3y0Big/exec";
+    try {
+        console.log('Woordenlijsten ophalen van Google Sheets...');
+        const response = await fetch(urlWords);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Data succesvol geladen:", data);
 
-
- 
-            try {
-
-        console.log('IK START MET FETCHEN!!!')
-        var urlWords =  "https://script.google.com/macros/s/AKfycbz85fmgKj32QQOTCJzgUv2iCpnh7JRrdgRLwmrYdRkaYBMAXYuc9FHtaryg9tLf3y0Big/exec"
-        
-              const response = await fetch(urlWords);
-              if (!response.ok)
-                throw new Error(`HTTP error! status: ${response.status}`);
-              const data = await response.json();
-                console.log("DATA GELADEN")
-                console.log(data)
-                wordlistFilenames = Object.keys(data)
-                for (const tabName in data) {
-                  let wordObjs = [];
-                    data[tabName].forEach((word) => {
-                      // Converteer afkortingen naar volledige sleutels
-                      for (const abbr in word) {
-                        if (jsonKeyAbbreviations[abbr]) {
-                          word[jsonKeyAbbreviations[abbr]] = word[abbr];
-                          wordObjs.push(word)
-                        }
-                      }
-                    });
-                     console.log(`Woordenlijst "${tabName}" geladen met ${wordObjs.length} woorden.`);
-                   wordDatabases[tabName] = wordObjs;
-                      // jsonKeyAbbreviations
+        // Verwerk de data naar de wordDatabases structuur
+        for (const tabName in data) {
+            // Map elk woord in de lijst naar een nieuw object met de juiste keys
+            wordDatabases[tabName] = data[tabName].map(wordWithAbbr => {
+                const newWordObj = {};
+                for (const abbr in wordWithAbbr) {
+                    // Vertaal de afkorting (bv. LT) naar de volledige naam (bv. latin)
+                    const fullKey = jsonKeyAbbreviations[abbr.toUpperCase()];
+                    if (fullKey) {
+                        newWordObj[fullKey] = wordWithAbbr[abbr];
+                    }
                 }
-                    return wordDatabases;
-          
-              
-            } catch (error) {
-              console.error(`Kon woordenlijst niet laden:`, error);
-            }
-          }
-        
+                return newWordObj;
+            });
+            console.log(`Woordenlijst "${tabName}" verwerkt met ${wordDatabases[tabName].length} woorden.`);
+        }
+    } catch (error) {
+        console.error(`Kon woordenlijst niet laden:`, error);
+        // Zorg ervoor dat de UI een foutmelding toont
+        const container = document.getElementById('word-lists');
+        if (container) {
+            container.innerHTML = '<p class="text-red-400">Fout bij het laden van de woordenlijsten. Controleer de internetverbinding en de console voor details.</p>';
+        }
+    }
+}
+
 
         // Doolhoven (onveranderd)
         const TILE_SIZE = 40;
@@ -768,30 +760,32 @@
           allScreens[screenKey].classList.remove("hidden");
         }
 
-        function populateWordLists() {
-          const container = document.getElementById("word-lists");
-          container.innerHTML = "";
-          if (Object.keys(wordDatabases).length === 0) {
-            container.innerHTML =
-              '<p class="text-red-400">Kon geen woordenlijsten laden.</p>';
-            return;
-          }
-          Object.keys(wordDatabases).forEach((listName) => {
-            const label = document.createElement("label");
-            label.className =
-              "flex items-center space-x-3 p-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.value = listName;
-            checkbox.className =
-              "form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500";
-            label.appendChild(checkbox);
-            const span = document.createElement("span");
-            span.textContent = listName;
-            label.appendChild(span);
-            container.appendChild(label);
-          });
-        }
+function populateWordLists() {
+    const container = document.getElementById('word-lists');
+    container.innerHTML = '';
+    
+    const listNames = Object.keys(wordDatabases);
+
+    if (listNames.length === 0) {
+        // Dit wordt nu afgehandeld in de catch-block van loadWordLists, maar als extra zekerheid.
+        container.innerHTML = '<p id="loading-text">Geen woordenlijsten gevonden...</p>';
+        return;
+    }
+    
+    listNames.forEach(listName => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center space-x-3 p-2 bg-gray-700 rounded cursor-pointer hover:bg-gray-600';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = listName;
+        checkbox.className = 'form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500';
+        label.appendChild(checkbox);
+        const span = document.createElement('span');
+        span.textContent = listName; // Gebruik de key uit de JSON ("1-10", etc.) als naam
+        label.appendChild(span);
+        container.appendChild(label);
+    });
+}
 
         function populateQuestionTypes() {
           const selectedLists = Array.from(
