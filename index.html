@@ -359,11 +359,13 @@
           playerImageLoaded = true;
         };
 
+        
+        
+        
+        
+        
         // Woordenlijsten
-        const wordlistFilenames = [
-          { file: "woorden1.json", name: "Eerste woordenlijst" },
-          { file: "woorden2.json", name: "Tweede woordenlijst" },
-        ];
+
         let wordDatabases = {};
 
         async function loadWordLists() {
@@ -373,25 +375,44 @@
               abbr,
             ])
           );
-          for (const list of wordlistFilenames) {
+
+
+ 
             try {
-              const response = await fetch(`./woorden/${list.file}`);
+
+        console.log('IK START MET FETCHEN!!!')
+        var urlWords =  "https://script.google.com/macros/s/AKfycbz85fmgKj32QQOTCJzgUv2iCpnh7JRrdgRLwmrYdRkaYBMAXYuc9FHtaryg9tLf3y0Big/exec"
+        
+              const response = await fetch(urlWords);
               if (!response.ok)
                 throw new Error(`HTTP error! status: ${response.status}`);
               const data = await response.json();
-              wordDatabases[list.name] = data.map((wordObj) => {
-                const newWordObj = {};
-                for (const key in wordObj) {
-                  const newKey = jsonKeyAbbreviations[key.toUpperCase()] || key;
-                  newWordObj[newKey] = wordObj[key];
+                console.log("DATA GELADEN")
+                console.log(data)
+                wordlistFilenames = Object.keys(data)
+                for (const tabName in data) {
+                  let wordObjs = [];
+                    data[tabName].forEach((word) => {
+                      // Converteer afkortingen naar volledige sleutels
+                      for (const abbr in word) {
+                        if (jsonKeyAbbreviations[abbr]) {
+                          word[jsonKeyAbbreviations[abbr]] = word[abbr];
+                          wordObjs.push(word)
+                        }
+                      }
+                    });
+                     console.log(`Woordenlijst "${tabName}" geladen met ${wordObjs.length} woorden.`);
+                   wordDatabases[tabName] = wordObjs;
+                      // jsonKeyAbbreviations
                 }
-                return newWordObj;
-              });
+                    return wordDatabases;
+          
+              
             } catch (error) {
-              console.error(`Kon woordenlijst niet laden: ${list.file}`, error);
+              console.error(`Kon woordenlijst niet laden:`, error);
             }
           }
-        }
+        
 
         // Doolhoven (onveranderd)
         const TILE_SIZE = 40;
@@ -783,13 +804,14 @@
           activeWords = selectedLists.flatMap(
             (listName) => wordDatabases[listName]
           );
-
+            console.log("Actieve woorden:", activeWords);
           const availableKeys = new Set();
           activeWords.forEach((word) => {
             Object.keys(word).forEach((key) => {
               if (keyMap[key]) availableKeys.add(key);
             });
           });
+          console.log("Beschikbare keys:", Array.from(availableKeys));
 
           const container = document.getElementById("question-types");
           container.innerHTML = "";
@@ -815,6 +837,7 @@
             label.appendChild(span);
             container.appendChild(label);
           });
+          console.log("Beschikbare vraagtypes:", Array.from(availableKeys));
           switchScreen("questionTypeSelectScreen");
         }
 
