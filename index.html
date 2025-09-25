@@ -101,9 +101,24 @@
       <div class="flex flex-col space-y-4">
         <button id="start-game-btn" class="menu-button">Start Spel</button>
         <button id="highscores-btn" class="menu-button">Highscores</button>
-        <button id="exit-btn" class="menu-button">Afsluiten</button>
       </div>
     </div>
+
+    <div id="loading" class="hidden text-center p-8 bg-gray-800 rounded-lg shadow-2xl">
+      <h1 class="text-6xl font-bold text-yellow-300 drop-shadow-lg">
+        Getting word lists...
+      </h1>
+      <div class="flex flex-col space-y-4">
+          Game loading...
+      </div>
+    </div>
+
+
+
+
+
+
+
 
     <div
       id="level-select-screen"
@@ -309,6 +324,7 @@
           questionTypeSelectScreen: document.getElementById(
             "question-type-select-screen"
           ),
+          loading: document.getElementById("loading"),
           gameContainer: document.getElementById("game-container"),
           gameOverScreen: document.getElementById("game-over-screen"),
           victoryScreen: document.getElementById("victory-screen"),
@@ -1399,8 +1415,9 @@ function togglePause() {
         window.addEventListener("resize", resizeCanvas);
         setupEventListeners();
         resizeCanvas();
+        switchScreen("loading");
         await loadWordLists();
-        populateWordLists();
+        await populateWordLists();
         switchScreen("mainMenu");
       });
     </script>
