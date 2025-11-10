@@ -26,7 +26,8 @@
             background-color: #718096;
             border-color: #cbd5e0;
         }
-        input[type="text"] {
+        input[type="text"],
+        select {
             background-color: #2d3748;
             border: 1px solid #4a5568;
             border-radius: 0.25rem;
@@ -34,7 +35,8 @@
             color: #f7fafc;
             width: 100%;
         }
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        select:focus {
             outline: none;
             border-color: #a0aec0;
         }
@@ -68,21 +70,25 @@
                 <input type="text" id="filename" placeholder="bijv. nieuwe_woorden" value="woorden" class="w-48">
                 <span class="text-gray-400">.json</span>
             </div>
-            <div class="flex gap-4">
+            <div class="flex flex-col sm:flex-row gap-4">
                 <button id="add-row-btn-top" class="action-button">+ Rij Toevoegen</button>
                 <button id="download-btn" class="action-button bg-green-700 hover:bg-green-600 border-green-500">Download JSON</button>
+                <button id="play-btn" class="action-button bg-indigo-700 hover:bg-indigo-600 border-indigo-500">Speel met deze woorden</button>
             </div>
         </div>
 
         <!-- Woorden container -->
         <div id="words-container" class="space-y-4">
             <!-- Header Row -->
-            <div class="hidden md:grid grid-cols-[1fr,1fr,1fr,1fr,1fr,auto] gap-4 items-center text-center font-bold text-yellow-300">
+            <div class="hidden md:grid grid-cols-9 gap-4 items-center text-center font-bold text-yellow-300">
                 <span>Latijn (LT)</span>
-                <span>Nederlands (NL)</span>
                 <span>Genitief (GT)</span>
+                <span>Nederlands (NL)</span>
                 <span>Geslacht (GS)</span>
                 <span>Woordsoort (WS)</span>
+                <span>Eerste Persoon (EP)</span>
+                <span>Vrouwelijke Vorm (VROUW)</span>
+                <span>Onzijdige Vorm (ONZIJD)</span>
                 <span class="w-8"></span>
             </div>
             <!-- Rijen worden hier dynamisch toegevoegd -->
@@ -95,24 +101,50 @@
     </div>
 
     <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => {
+                    console.warn('Service worker registratie mislukt:', err);
+                });
+            });
+        }
         const wordsContainer = document.getElementById('words-container');
         const addRowBtnTop = document.getElementById('add-row-btn-top');
         const addRowBtnBottom = document.getElementById('add-row-btn-bottom');
         const downloadBtn = document.getElementById('download-btn');
+        const playBtn = document.getElementById('play-btn');
         const filenameInput = document.getElementById('filename');
+
+        const wordTypeOptions = [
+            'bn',
+            'zn',
+            'vw',
+            'bw',
+            'ww',
+            'vraagpartikel',
+            'onbep. vnw.',
+            'tussenwerpsel',
+            'persoon. vnw.',
+            'bw/vw'
+        ];
+
+        const genderOptions = ['m', 'v', 'o'];
 
         // Definieer de kolommen en hun bijbehorende afkortingen
         const columns = [
-            { id: 'latin', label: 'Latijn (LT)', placeholder: 'Latijn (verplicht)', key: 'LT' },
-            { id: 'nederlands', label: 'Nederlands (NL)', placeholder: 'Nederlands (verplicht)', key: 'NL' },
-            { id: 'genitief', label: 'Genitief (GT)', placeholder: 'Genitief', key: 'GT' },
-            { id: 'geslacht', label: 'Geslacht (GS)', placeholder: 'Geslacht (m/v/o)', key: 'GS' },
-            { id: 'woordsoort', label: 'Woordsoort (WS)', placeholder: 'Woordsoort', key: 'WS' }
+            { id: 'latin', label: 'Latijn (LT)', placeholder: 'Latijn (verplicht)', key: 'LT', type: 'text' },
+            { id: 'genitief', label: 'Genitief (GT)', placeholder: 'Genitief', key: 'GT', type: 'text' },
+            { id: 'nederlands', label: 'Nederlands (NL)', placeholder: 'Nederlands (verplicht)', key: 'NL', type: 'text' },
+            { id: 'geslacht', label: 'Geslacht (GS)', placeholder: 'Selecteer geslacht', key: 'GS', type: 'select', options: genderOptions },
+            { id: 'woordsoort', label: 'Woordsoort (WS)', placeholder: 'Selecteer woordsoort', key: 'WS', type: 'select', options: wordTypeOptions },
+            { id: 'eerstepersoon', label: 'Eerste persoon (EP)', placeholder: 'Eerste persoon', key: 'EP', type: 'text' },
+            { id: 'vrouwelijkevorm', label: 'Vrouwelijke vorm (VROUW)', placeholder: 'Vrouwelijke vorm', key: 'VROUW', type: 'text' },
+            { id: 'onzijdigevorm', label: 'Onzijdige vorm (ONZIJD)', placeholder: 'Onzijdige vorm', key: 'ONZIJD', type: 'text' }
         ];
 
         function createWordRow() {
             const row = document.createElement('div');
-            row.className = 'grid grid-cols-1 md:grid-cols-[1fr,1fr,1fr,1fr,1fr,auto] gap-4 items-center p-4 bg-gray-900 rounded-lg word-row';
+            row.className = 'grid grid-cols-1 md:grid-cols-9 gap-4 items-center p-4 bg-gray-900 rounded-lg word-row';
 
             columns.forEach(col => {
                 const wrapper = document.createElement('div');
@@ -123,11 +155,27 @@
                 label.textContent = col.label;
                 wrapper.appendChild(label);
 
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.placeholder = col.placeholder;
-                input.dataset.key = col.id; // Gebruik de volledige naam als data-key
-                wrapper.appendChild(input);
+                let inputElement;
+                if (col.type === 'select') {
+                    inputElement = document.createElement('select');
+                    inputElement.dataset.key = col.id;
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = col.placeholder || 'Selecteer een optie';
+                    inputElement.appendChild(emptyOption);
+                    col.options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.textContent = opt;
+                        inputElement.appendChild(option);
+                    });
+                } else {
+                    inputElement = document.createElement('input');
+                    inputElement.type = 'text';
+                    inputElement.placeholder = col.placeholder;
+                    inputElement.dataset.key = col.id; // Gebruik de volledige naam als data-key
+                }
+                wrapper.appendChild(inputElement);
                 row.appendChild(wrapper);
             });
 
@@ -143,17 +191,17 @@
             wordsContainer.appendChild(row);
         }
 
-        function generateJSON() {
+        function collectWordsData() {
             const allRows = document.querySelectorAll('.word-row');
             const wordsArray = [];
 
             allRows.forEach(row => {
-                const inputs = row.querySelectorAll('input[type="text"]');
+                const inputs = row.querySelectorAll('input[type="text"], select');
                 const wordObject = {};
                 let hasRequiredFields = true;
                 
-                const latinInput = row.querySelector('input[data-key="latin"]');
-                const nederlandsInput = row.querySelector('input[data-key="nederlands"]');
+                const latinInput = row.querySelector('[data-key="latin"]');
+                const nederlandsInput = row.querySelector('[data-key="nederlands"]');
 
                 if (!latinInput.value.trim() || !nederlandsInput.value.trim()) {
                     hasRequiredFields = false;
@@ -178,6 +226,12 @@
                 return null;
             }
 
+            return wordsArray;
+        }
+
+        function generateJSON() {
+            const wordsArray = collectWordsData();
+            if (!wordsArray) return null;
             return JSON.stringify(wordsArray, null, 2); // 2 spaties voor inspringing
         }
 
@@ -200,6 +254,28 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        });
+
+        const BUILDER_STORAGE_KEY = 'latinPacmanBuilderWords';
+
+        playBtn.addEventListener('click', () => {
+            const wordsArray = collectWordsData();
+            if (!wordsArray) return;
+            const baseName = (filenameInput.value.trim() || 'Eigen woorden').replace(/\s+/g, ' ').trim();
+            const listName = `Eigen lijst - ${baseName}`;
+            const payload = {
+                lists: {
+                    [listName]: wordsArray
+                },
+                autoStartList: listName
+            };
+            try {
+                localStorage.setItem(BUILDER_STORAGE_KEY, JSON.stringify(payload));
+            } catch (err) {
+                alert('Kon de woorden niet opslaan in de browser. Sta lokaal opslaan toe en probeer opnieuw.');
+                return;
+            }
+            window.location.href = 'index.html';
         });
         
         // Event listener voor 'Enter' om een nieuwe rij toe te voegen
@@ -235,4 +311,3 @@
     </script>
 </body>
 </html>
-

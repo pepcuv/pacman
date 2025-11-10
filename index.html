@@ -92,6 +92,22 @@
           opacity: 0;
         }
       }
+      #powerup-banner {
+        position: absolute;
+        top: 1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.5rem 1.5rem;
+        background: rgba(250, 204, 21, 0.95);
+        color: #1a202c;
+        border-radius: 9999px;
+        font-weight: bold;
+        font-size: 1.5rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        box-shadow: 0 0 20px rgba(250, 204, 21, 0.85);
+        z-index: 60;
+      }
     </style>
   </head>
   <body class="flex items-center justify-center h-screen game-screen">
@@ -130,6 +146,26 @@
         class="space-y-3 text-left max-h-64 overflow-y-auto p-4 border-2 border-gray-600 rounded"
       >
         <p id="loading-text">Woordenlijsten laden...</p>
+      </div>
+      <div class="mt-4 space-y-3">
+        <button id="upload-custom-btn" class="menu-button w-full">
+          Eigen woordenlijst uploaden
+        </button>
+        <input
+          type="file"
+          id="custom-words-input"
+          accept="application/json"
+          class="hidden"
+        />
+        <p id="custom-lists-info" class="text-sm text-gray-300">
+          Je kunt hier een woorden.json-bestand selecteren.
+        </p>
+        <a
+          href="woordenlijstmaker.html"
+          target="_blank"
+          class="text-yellow-300 underline block"
+          >Geen bestand? Gebruik de woordenlijstmaker.</a
+        >
       </div>
       <button id="select-question-types-btn" class="menu-button mt-6 w-full">
         Volgende
@@ -241,6 +277,8 @@
     <button id="resume-btn" class="menu-button">Hervatten</button>
 </div>
 
+    <div id="powerup-banner" class="hidden">Iulius umbras edit</div>
+
 
 
     <div id="game-over-screen" class="hidden text-center">
@@ -249,6 +287,22 @@
         Eindscore: <span id="final-score-gameover">0</span>
       </p>
       <button id="restart-game-btn" class="menu-button">Terug naar menu</button>
+      <div
+        id="missed-words-container-gameover"
+        class="hidden mt-6 bg-gray-900 p-4 rounded-lg text-left max-w-xl mx-auto"
+      >
+        <h3 class="text-2xl text-yellow-300 mb-3">Moeilijke woorden</h3>
+        <ul
+          id="missed-words-list-gameover"
+          class="space-y-2 text-lg max-h-48 overflow-y-auto list-disc list-inside"
+        ></ul>
+        <button
+          id="practice-missed-btn-gameover"
+          class="menu-button mt-4 w-full"
+        >
+          Oefen deze woorden
+        </button>
+      </div>
     </div>
 
     <div id="victory-screen" class="hidden text-center">
@@ -260,14 +314,34 @@
       <button id="restart-victory-btn" class="menu-button">
         Terug naar menu
       </button>
+      <div
+        id="missed-words-container-victory"
+        class="hidden mt-6 bg-gray-900 p-4 rounded-lg text-left max-w-xl mx-auto"
+      >
+        <h3 class="text-2xl text-yellow-300 mb-3">Moeilijke woorden</h3>
+        <ul
+          id="missed-words-list-victory"
+          class="space-y-2 text-lg max-h-48 overflow-y-auto list-disc list-inside"
+        ></ul>
+        <button
+          id="practice-missed-btn-victory"
+          class="menu-button mt-4 w-full"
+        >
+          Oefen deze woorden
+        </button>
+      </div>
     </div>
 
     <div
       id="highscore-screen"
       class="hidden p-8 bg-gray-800 rounded-lg shadow-2xl w-11/12 max-w-lg"
     >
+      <div
+        id="highscore-banner"
+        class="hidden text-3xl text-yellow-300 text-center font-bold mb-4"
+      ></div>
       <h2 class="text-4xl mb-6 text-yellow-300 text-center">
-        Top 10 van je eigen highscores
+        Highscores
       </h2>
       <ol
         id="highscore-list"
@@ -275,6 +349,12 @@
       >
         <!-- Highscores -->
       </ol>
+      <button
+        id="practice-difficult-btn"
+        class="hidden menu-button mt-6 w-full"
+      >
+        Oefen moeilijke woorden
+      </button>
       <button id="back-to-menu-from-hs-btn" class="menu-button mt-6 w-full">
         Terug naar menu
       </button>
@@ -282,22 +362,34 @@
 
     <script>
       window.addEventListener("load", async () => {
+        if ("serviceWorker" in navigator) {
+          try {
+            await navigator.serviceWorker.register("sw.js");
+          } catch (err) {
+            console.warn("Service worker registratie mislukt:", err);
+          }
+        }
         // =================================================================
         // --- SPELCONFIGURATIE ---
         // =================================================================
         const gameConfig = {
-          initialTime: 16,
+          initialTime: 20,
           initialLives: 3,
           pointsCorrect: 100,
-          timeBonusCorrect: 5,
+          timeBonusCorrect: 6,
           pointsIncorrect: -50,
           timePenaltyIncorrect: -8,
           levelClearTimeBonusMultiplier: 5,
           invincibilityDuration: 1500,
-          playerSpeed: 3,
+          playerSpeed: 4,
           baseEnemySpeed: 2,
           enemySpeedIncreasePerLevel: 0.1,
-          startLevel: 1,
+          startLevel: 4,
+        };
+        const highscoreAPI = {
+          endpoint:
+            "https://script.google.com/macros/s/AKfycbxDpJirwZNmTVFLfVvqv9RXm-eRtlYBWO3xMi9IfFRl8225RZqT5MrYcoyo6cZpgFIC6g/exec",
+          apiKey: "", // Voeg hier je sleutel toe als je een beveiligingscheck gebruikt
         };
 
         const keyMap = {
@@ -323,7 +415,21 @@
           ONZIJD: "onzijdig",
         };
 
-
+        const romanCollectibles = [
+          "🏺",
+          "📜",
+          "🏛️",
+          "🛡️",
+          "🗡️",
+          "🍇",
+          "🍷",
+          "👑",
+          "⚱️",
+          "⚔️",
+        ];
+        const powerUpEmoji = "🍴";
+        const POWER_UP_DURATION = 15000;
+        const BUILDER_STORAGE_KEY = "latinPacmanBuilderWords";
 
 
         // --- Initialisatie ---
@@ -355,10 +461,22 @@
           finalScoreGameover = document.getElementById("final-score-gameover"),
           finalScoreVictory = document.getElementById("final-score-victory"),
           flashcardTitle = document.getElementById("flashcard-title"),
-          flashcardContent = document.getElementById("flashcard-content");
+          flashcardContent = document.getElementById("flashcard-content"),
+          powerUpBanner = document.getElementById("powerup-banner"),
+          customUploadBtn = document.getElementById("upload-custom-btn"),
+          customWordsInput = document.getElementById("custom-words-input"),
+          customListsInfo = document.getElementById("custom-lists-info"),
+          highscoreBanner = document.getElementById("highscore-banner"),
+          practiceDifficultBtn = document.getElementById("practice-difficult-btn");
 
         // Geluid
         const synth = new Tone.Synth().toDestination();
+        const powerUpLoopSynth = new Tone.Synth({
+          oscillator: { type: "square" },
+          envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 },
+        }).toDestination();
+        let powerUpLoop;
+        let powerUpPatternIndex = 0;
         const correctSound = () => {
           if (Tone.context.state !== "running") return;
           synth.triggerAttackRelease("C5", "8n", Tone.now());
@@ -377,6 +495,41 @@
           synth.triggerAttackRelease("A4", "16n");
         };
 
+        function startPowerUpMusic() {
+          if (typeof Tone === "undefined") return;
+          if (!powerUpLoop) {
+            const pattern = [
+              "C5",
+              "C5",
+              "G4",
+              "C5",
+              "E5",
+              "G5",
+              "E5",
+              "C5",
+            ];
+            powerUpLoop = new Tone.Loop((time) => {
+              const note = pattern[powerUpPatternIndex % pattern.length];
+              powerUpLoopSynth.triggerAttackRelease(note, "8n", time);
+              powerUpPatternIndex++;
+            }, "4n");
+          }
+          if (Tone.context.state !== "running") {
+            Tone.start();
+          }
+          if (Tone.Transport.state !== "started") {
+            Tone.Transport.start();
+          }
+          powerUpLoop.start(Tone.now());
+        }
+
+        function stopPowerUpMusic() {
+          if (powerUpLoop) {
+            powerUpLoop.stop();
+            powerUpPatternIndex = 0;
+          }
+        }
+
         // Spelerimage
 
         const playerImage = new Image();
@@ -394,6 +547,7 @@
         // Woordenlijsten
 
         let wordDatabases = {};
+        const customWordDatabases = {};
 
 async function loadWordLists() {
     const urlWords = "https://script.google.com/macros/s/AKfycbz85fmgKj32QQOTCJzgUv2iCpnh7JRrdgRLwmrYdRkaYBMAXYuc9FHtaryg9tLf3y0Big/exec";
@@ -422,6 +576,7 @@ async function loadWordLists() {
             });
             console.log(`Woordenlijst "${tabName}" verwerkt met ${wordDatabases[tabName].length} woorden.`);
         }
+        return true;
     } catch (error) {
         console.error(`Kon woordenlijst niet laden:`, error);
         // Zorg ervoor dat de UI een foutmelding toont
@@ -429,6 +584,7 @@ async function loadWordLists() {
         if (container) {
             container.innerHTML = '<p class="text-red-400">Fout bij het laden van de woordenlijsten. Controleer de internetverbinding en de console voor details.</p>';
         }
+        return false;
     }
 }
 
@@ -473,144 +629,144 @@ async function loadWordLists() {
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
           ],
           [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1],
-            [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,1,0,1,1,0,1,1,1,0,1,1,1,1,1,0,0,0,1],
+    [1,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,1],
+    [1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,0,1],
+    [1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1],
+    [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,1,0,1],
+    [1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1],
+    [1,1,1,1,1,1,1,0,1,0,1,1,1,0,1,0,1,0,1,1],
+    [1,0,0,0,0,0,1,0,1,0,1,0,1,0,0,0,1,0,0,1],
+    [1,0,1,1,1,0,1,0,0,0,1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
+
+        [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1],
+    [1,0,1,1,0,0,0,1,1,1,1,1,1,0,1,0,1,1,0,1],
+    [1,0,1,1,0,1,0,1,0,0,0,0,1,0,0,0,1,1,0,1],
+    [1,0,0,0,0,1,0,1,0,1,1,0,1,0,1,0,0,0,0,1],
+    [1,1,0,1,1,1,0,1,0,1,1,0,1,0,1,1,1,0,1,1],
+    [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,1,1,1,0,1,1,0,1,1,0,1,1,0,0,1,0,1,0,1],
+    [1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,1],
+    [1,0,1,1,0,0,0,1,0,1,0,0,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,1,0,1,0,1,0,1,0,1,1,1,0,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
+          [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1],
+    [1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+    [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,0,0,1],
+    [1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,1],
+    [1,1,1,1,0,1,0,1,1,0,1,1,1,0,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,1],
+    [1,0,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1],
+    [1,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,0,1,0,1,1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
+         [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+    [1,0,1,0,0,0,0,1,0,1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,0,0,1,1,0,1,0,1,0,1,0,1,1,1,0,0,0,1],
+    [1,0,1,0,1,1,0,1,0,1,0,0,0,1,1,1,0,1,0,1],
+    [1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,0,1,0,0,0,1,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,1],
+    [1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
+          [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,0,1,0,1,1,1,1,0,0,0,1,1,1,1,1],
+    [1,0,0,0,1,0,1,0,1,0,0,0,0,1,0,1,0,0,0,1],
+    [1,0,1,0,1,0,0,0,1,0,1,1,0,1,0,1,0,1,0,1],
+    [1,0,1,0,1,1,0,1,1,0,1,0,0,1,0,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,1],
+    [1,0,1,1,1,0,0,1,1,0,0,0,1,1,1,1,0,1,0,1],
+    [1,0,0,0,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,1],
+    [1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,0,1,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [1,0,1,1,0,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
+          [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,1],
+    [1,0,1,0,1,0,1,0,1,1,1,1,0,0,0,1,0,1,0,1],
+    [1,0,1,0,1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1],
+    [1,0,0,0,1,0,0,0,1,0,1,1,0,1,0,1,0,0,0,1],
+    [1,1,0,1,1,1,0,1,1,0,1,0,0,0,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,1],
+    [1,0,1,1,1,1,1,0,1,1,1,0,1,0,0,0,0,1,0,1],
+    [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1,1,0,1,0,1],
+    [1,0,1,0,1,0,1,1,0,1,1,1,1,0,1,1,0,1,0,1],
+    [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,1],
+    [1,0,1,0,1,1,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+    [1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,1,1,0,1,1,1,0,1,1,1,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
 
           [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-            [1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1],
-            [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],
-            [1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
-            [1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
-            [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,1,0,1],
+    [1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1],
+    [1,1,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,1,1,1],
+    [1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1],
+    [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,1,0,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1],
+    [1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
 
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
-
-          [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1],
-            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1],
-            [1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-            [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          ],
+         [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,1,1,1,1,0,0,0,0,0,1,1,1,1,0,0,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
+    [1,0,0,1,0,1,1,1,0,0,0,0,1,0,1,1,1,0,0,1],
+    [1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,1],
+    [1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,1],
+    [1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,1],
+    [1,0,0,1,1,1,1,0,0,0,0,0,1,1,1,1,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+],
         ];
 
         // --- Game State ---
@@ -626,21 +782,68 @@ async function loadWordLists() {
         let currentQuestionWord, currentQuestionType;
         let selectedQuestionTypes = [],
           showFlashcard = false;
-        let highscores =
-          JSON.parse(localStorage.getItem("latinPacmanHighscores")) || [];
+        const LOCAL_HIGHSCORE_KEY = "latinPacmanHighscores";
+        const LOCAL_REMOTE_HIGHSCORES_KEY = "latinPacmanRemoteHighscores";
+        const LOCAL_WORDS_KEY = "latinPacmanWordDatabases";
+        const DIFFICULT_WORDS_KEY = "latinPacmanDifficultWords";
+        const DIFFICULT_LIST_NAME = "Moeilijke woorden";
+        const DIFFICULT_SUCCESS_THRESHOLD = 3;
+        let highscores = loadLocalHighscores();
+        let isHighscoreScreenActive = false;
+
+        function loadLocalHighscores() {
+          const stored =
+            JSON.parse(localStorage.getItem(LOCAL_HIGHSCORE_KEY)) || [];
+          return stored.map((entry) => ({
+            name: entry.name,
+            score: entry.score,
+            pending: entry.pending ?? false,
+            timestamp: entry.timestamp || Date.now(),
+          }));
+        }
+        function persistHighscores() {
+          localStorage.setItem(LOCAL_HIGHSCORE_KEY, JSON.stringify(highscores));
+        }
+        function loadCachedRemoteHighscores() {
+          try {
+            const raw =
+              JSON.parse(
+                localStorage.getItem(LOCAL_REMOTE_HIGHSCORES_KEY)
+              ) || null;
+            if (raw && Array.isArray(raw.scores)) {
+              return raw;
+            }
+          } catch (err) {
+            console.warn("Kon remote highscores-cache niet laden:", err);
+          }
+          return null;
+        }
+        function saveCachedRemoteHighscores(scores) {
+          try {
+            localStorage.setItem(
+              LOCAL_REMOTE_HIGHSCORES_KEY,
+              JSON.stringify({
+                scores,
+                fetchedAt: Date.now(),
+              })
+            );
+          } catch (err) {
+            console.warn("Kon remote highscores-cache niet opslaan:", err);
+          }
+        }
         let player, enemies, collectibles;
-        const romanCollectibles = [
-          "🏺",
-          "📜",
-          "🏛️",
-          "🛡️",
-          "🗡️",
-          "🍇",
-          "🍷",
-          "👑",
-          "⚱️",
-          "⚔️",
-        ];
+        let powerUpActive = false;
+        let powerUpTimeoutId = null;
+        let answerLocked = false;
+        let missedQuestions = [];
+        let missedWordsMap = new Map();
+        let pendingAutoStartList = null;
+        let shouldAutoOpenQuestionTypes = false;
+        let autoStartedFromBuilder = false;
+        let difficultWordsData = {};
+        let practicingDifficultOnly = false;
+        let difficultCompletionNotified = false;
+
 
         // --- Entiteiten ---
         class Entity {
@@ -751,8 +954,13 @@ async function loadWordLists() {
             super(x, y, size, speed);
             this.dx = speed;
             this.dy = 0;
+            this.spawnX = x;
+            this.spawnY = y;
+            this.isEaten = false;
+            this.eatenTimeout = null;
           }
           update() {
+            if (this.isEaten) return;
             const newX = this.x + this.dx;
             const newY = this.y + this.dy;
             if (this.collidesWithWall(newX, newY) || Math.random() < 0.02) {
@@ -787,17 +995,304 @@ async function loadWordLists() {
           allScreens[screenKey].classList.remove("hidden");
         }
 
+function getWordListCheckboxes() {
+    return Array.from(document.querySelectorAll("#word-lists input[type='checkbox']:not(#select-all-wordlists)"));
+}
+
+function syncSelectAllWordLists() {
+    const selectAll = document.getElementById('select-all-wordlists');
+    if (!selectAll) return;
+    const checkboxes = getWordListCheckboxes();
+    if (checkboxes.length === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+        return;
+    }
+    const checkedCount = checkboxes.filter(cb => cb.checked).length;
+    selectAll.checked = checkedCount === checkboxes.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+}
+
+function getAllWordDatabases() {
+    return { ...wordDatabases, ...customWordDatabases };
+}
+
+function normalizeWordEntry(entry) {
+    const normalized = {};
+    Object.entries(entry || {}).forEach(([rawKey, value]) => {
+        if (value === null || value === undefined || value === "") return;
+        const keyStr = String(rawKey).trim();
+        if (!keyStr) return;
+        const mappedKey = jsonKeyAbbreviations[keyStr.toUpperCase()] || keyStr.toLowerCase();
+        if (mappedKey && mappedKey !== "") {
+            normalized[mappedKey] = value;
+        }
+    });
+    return normalized;
+}
+
+function normalizeWordArray(wordArray) {
+    if (!Array.isArray(wordArray)) return [];
+    return wordArray
+        .map(normalizeWordEntry)
+        .filter((word) => word.latin);
+}
+
+function processCustomWordData(data, sourceName) {
+    const result = {};
+    if (Array.isArray(data)) {
+        result[sourceName] = normalizeWordArray(data);
+    } else if (typeof data === "object" && data !== null) {
+        Object.entries(data).forEach(([listName, listValue]) => {
+            if (Array.isArray(listValue)) {
+                const combinedName = sourceName
+                    ? `${sourceName} - ${listName}`
+                    : listName;
+                result[combinedName] = normalizeWordArray(listValue);
+            }
+        });
+    }
+    return result;
+}
+
+function loadWordListsFromCache() {
+    try {
+        const cached = JSON.parse(localStorage.getItem(LOCAL_WORDS_KEY));
+        if (!cached || typeof cached !== "object") return false;
+        if (cached.data && typeof cached.data === "object") {
+            wordDatabases = cached.data;
+            return true;
+        }
+    } catch (err) {
+        console.warn("Kon woordenlijsten uit cache niet laden:", err);
+    }
+    return false;
+}
+
+function saveWordListsToCache() {
+    try {
+        localStorage.setItem(
+            LOCAL_WORDS_KEY,
+            JSON.stringify({
+                data: wordDatabases,
+                fetchedAt: Date.now(),
+            })
+        );
+    } catch (err) {
+        console.warn("Kon woordenlijsten niet cachen:", err);
+    }
+}
+
+function loadDifficultWords() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(DIFFICULT_WORDS_KEY)) || {};
+        difficultWordsData = {};
+        Object.keys(stored).forEach((latin) => {
+            const entry = stored[latin];
+            if (entry && entry.word) {
+                difficultWordsData[latin] = {
+                    word: entry.word,
+                    successCount: entry.successCount || 0,
+                };
+            }
+        });
+    } catch (err) {
+        console.warn("Kon moeilijke woorden niet laden:", err);
+        difficultWordsData = {};
+    }
+    syncDifficultWordList(false);
+}
+
+function persistDifficultWords() {
+    try {
+        localStorage.setItem(
+            DIFFICULT_WORDS_KEY,
+            JSON.stringify(difficultWordsData)
+        );
+    } catch (err) {
+        console.warn("Kon moeilijke woorden niet opslaan:", err);
+    }
+}
+
+function syncDifficultWordList(triggerPopulate = true) {
+    const words = Object.values(difficultWordsData).map((entry) => entry.word);
+    if (words.length) {
+        customWordDatabases[DIFFICULT_LIST_NAME] = words;
+    } else {
+        delete customWordDatabases[DIFFICULT_LIST_NAME];
+    }
+    if (triggerPopulate) populateWordLists();
+}
+
+function addWordToDifficultList(wordObj) {
+    if (!wordObj || !wordObj.latin) return;
+    const wasPresent = Boolean(difficultWordsData[wordObj.latin]);
+    difficultWordsData[wordObj.latin] = {
+        word: { ...wordObj },
+        successCount: 0,
+    };
+    persistDifficultWords();
+    syncDifficultWordList(!wasPresent);
+}
+
+function handleDifficultWordSuccess(wordObj) {
+    if (!practicingDifficultOnly || !wordObj?.latin) return;
+    const entry = difficultWordsData[wordObj.latin];
+    if (!entry) return;
+    entry.successCount = (entry.successCount || 0) + 1;
+    if (entry.successCount >= DIFFICULT_SUCCESS_THRESHOLD) {
+        delete difficultWordsData[wordObj.latin];
+        activeWords = activeWords.filter((word) => word.latin !== wordObj.latin);
+        persistDifficultWords();
+        syncDifficultWordList(true);
+        if (Object.keys(difficultWordsData).length === 0) {
+            announceDifficultWordsCleared();
+        }
+    } else {
+        persistDifficultWords();
+    }
+}
+
+function announceDifficultWordsCleared() {
+    if (!practicingDifficultOnly || difficultCompletionNotified) return;
+    difficultCompletionNotified = true;
+    setTimeout(() => {
+        alert("Goed gedaan, Julius! De moeilijke woordenlijst is weggewerkt!");
+        endGame("victory");
+    }, 400);
+}
+
+function handleCustomWordsUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+        try {
+            const parsed = JSON.parse(loadEvent.target.result);
+            const baseName = file.name.replace(/\.[^/.]+$/, "");
+            const normalizedLists = processCustomWordData(parsed, baseName);
+            const entries = Object.entries(normalizedLists || {}).filter(([, words]) => words.length > 0);
+            if (entries.length === 0) {
+                throw new Error("Geen geldige woorden gevonden in dit bestand.");
+            }
+            entries.forEach(([name, words]) => {
+                customWordDatabases[name] = words;
+            });
+            populateWordLists();
+            if (customListsInfo) {
+                customListsInfo.textContent = `Toegevoegd: ${entries
+                    .map(([name]) => name)
+                    .join(", ")}`;
+            }
+        } catch (err) {
+            console.error("Kon woordenlijst niet laden:", err);
+            alert("Het bestand kon niet worden geladen. Controleer of het geldige JSON bevat.");
+        } finally {
+            event.target.value = "";
+        }
+    };
+    reader.readAsText(file);
+}
+
+function importBuilderWordsFromStorage() {
+    const raw = localStorage.getItem(BUILDER_STORAGE_KEY);
+    if (!raw) return;
+    try {
+        const parsed = JSON.parse(raw);
+        const listsData = parsed.lists || parsed;
+        const normalizedLists = processCustomWordData(listsData, "");
+        const entries = Object.entries(normalizedLists || {}).filter(([, words]) => words.length > 0);
+        entries.forEach(([name, words]) => {
+            customWordDatabases[name] = words;
+        });
+        if (entries.length && customListsInfo) {
+            customListsInfo.textContent = `Toegevoegd via woordenlijstmaker: ${entries.map(([name]) => name).join(", ")}`;
+        }
+        if (entries.length) {
+            const preferredName = parsed.autoStartList;
+            const autoEntry =
+              (preferredName && entries.find(([name]) => name === preferredName)) ||
+              entries[0];
+            if (autoEntry) {
+              pendingAutoStartList = autoEntry[0];
+              shouldAutoOpenQuestionTypes = true;
+            }
+        }
+    } catch (err) {
+        console.error("Kon woordenlijstmaker-data niet importeren:", err);
+    } finally {
+        localStorage.removeItem(BUILDER_STORAGE_KEY);
+    }
+}
+
+function applyAutoSelectionIfNeeded() {
+    if (!pendingAutoStartList) return;
+    const checkboxes = getWordListCheckboxes();
+    let found = false;
+    checkboxes.forEach((cb) => {
+        const match = cb.value === pendingAutoStartList;
+        cb.checked = match;
+        if (match) found = true;
+    });
+    syncSelectAllWordLists();
+    const shouldProceed = found && shouldAutoOpenQuestionTypes;
+    pendingAutoStartList = null;
+    shouldAutoOpenQuestionTypes = false;
+    if (shouldProceed) {
+        autoStartedFromBuilder = true;
+        populateQuestionTypes();
+    }
+}
+
 function populateWordLists() {
     const container = document.getElementById('word-lists');
+    if (!container) return;
+    const previouslySelected = new Set(
+        getWordListCheckboxes()
+            .filter((cb) => cb.checked)
+            .map((cb) => cb.value)
+    );
+
     container.innerHTML = '';
-    
-    const listNames = Object.keys(wordDatabases);
+
+
+    const difficultOrder = customWordDatabases[DIFFICULT_LIST_NAME]
+        ? [DIFFICULT_LIST_NAME]
+        : [];
+    const otherCustom = Object.keys(customWordDatabases)
+        .filter((name) => name !== DIFFICULT_LIST_NAME)
+        .sort();
+    const remoteNames = Object.keys(wordDatabases).sort();
+    const listNames = [...difficultOrder, ...otherCustom, ...remoteNames];
 
     if (listNames.length === 0) {
         // Dit wordt nu afgehandeld in de catch-block van loadWordLists, maar als extra zekerheid.
         container.innerHTML = '<p id="loading-text">Geen woordenlijsten gevonden...</p>';
         return;
     }
+
+    const selectAllLabel = document.createElement('label');
+    selectAllLabel.className = 'flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700 mb-2';
+    const selectAllInner = document.createElement('div');
+    selectAllInner.className = 'flex items-center space-x-3';
+    const selectAllCheckbox = document.createElement('input');
+    selectAllCheckbox.type = 'checkbox';
+    selectAllCheckbox.id = 'select-all-wordlists';
+    selectAllCheckbox.className = 'form-checkbox h-5 w-5 text-yellow-400 bg-gray-900 border-gray-600 rounded focus:ring-yellow-500';
+    const selectAllText = document.createElement('span');
+    selectAllText.textContent = 'Selecteer alle woordenlijsten';
+    selectAllInner.appendChild(selectAllCheckbox);
+    selectAllInner.appendChild(selectAllText);
+    selectAllLabel.appendChild(selectAllInner);
+    container.appendChild(selectAllLabel);
+
+    selectAllCheckbox.addEventListener('change', (e) => {
+        const shouldCheck = e.target.checked;
+        getWordListCheckboxes().forEach(cb => {
+            cb.checked = shouldCheck;
+        });
+        selectAllCheckbox.indeterminate = false;
+    });
     
     listNames.forEach(listName => {
         const label = document.createElement('label');
@@ -806,24 +1301,65 @@ function populateWordLists() {
         checkbox.type = 'checkbox';
         checkbox.value = listName;
         checkbox.className = 'form-checkbox h-5 w-5 text-yellow-400 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500';
+        checkbox.addEventListener('change', syncSelectAllWordLists);
+        if (previouslySelected.size === 0) {
+            checkbox.checked = false;
+        } else {
+            checkbox.checked = previouslySelected.has(listName);
+        }
         label.appendChild(checkbox);
         const span = document.createElement('span');
         span.textContent = listName; // Gebruik de key uit de JSON ("1-10", etc.) als naam
+        if (customWordDatabases[listName]) {
+            const badge = document.createElement('span');
+            badge.className = 'ml-2 text-xs uppercase tracking-wide text-yellow-300';
+            badge.textContent = '(eigen)';
+            span.appendChild(document.createTextNode(' '));
+            span.appendChild(badge);
+        }
         label.appendChild(span);
         container.appendChild(label);
     });
+
+    syncSelectAllWordLists();
+    applyAutoSelectionIfNeeded();
+}
+
+async function refreshWordListsFromNetwork(isBackground = false) {
+    try {
+        const success = await loadWordLists();
+        if (!success) {
+            if (!isBackground) {
+                console.warn("Online woordenlijsten konden niet worden geladen.");
+            }
+            return;
+        }
+        saveWordListsToCache();
+        populateWordLists();
+    } catch (err) {
+        if (!isBackground) {
+            console.error("Kon woordenlijsten niet online vernieuwen:", err);
+        }
+    }
 }
 
         function populateQuestionTypes() {
-          const selectedLists = Array.from(
-            document.querySelectorAll("#word-lists input:checked")
-          ).map((cb) => cb.value);
+          const selectedLists = getWordListCheckboxes()
+            .filter((cb) => cb.checked)
+            .map((cb) => cb.value);
           if (selectedLists.length === 0) {
             alert("Selecteer minstens één woordenlijst!");
             return;
           }
+          practicingDifficultOnly =
+            selectedLists.length === 1 &&
+            selectedLists[0] === DIFFICULT_LIST_NAME;
+          if (!practicingDifficultOnly) {
+            difficultCompletionNotified = false;
+          }
+          const allLists = getAllWordDatabases();
           activeWords = selectedLists.flatMap(
-            (listName) => wordDatabases[listName]
+            (listName) => allLists[listName] || []
           );
             console.log("Actieve woorden:", activeWords);
           const availableKeys = new Set();
@@ -878,12 +1414,17 @@ function populateWordLists() {
           lives = gameConfig.initialLives;
           isPaused = false;
           isInvincible = false;
+          deactivatePowerUp();
+          difficultCompletionNotified = false;
+          missedQuestions = [];
+          missedWordsMap = new Map();
 
           switchScreen("gameContainer");
           startLevel();
         }
 
         function startLevel() {
+          deactivatePowerUp();
           isPaused = false;
           timer = gameConfig.initialTime;
           updateUI();
@@ -955,8 +1496,22 @@ function populateWordLists() {
                 y: tile.r * TILE_SIZE,
                 size: TILE_SIZE * 0.7,
                 emoji: romanCollectibles[i % romanCollectibles.length],
+                type: "normal",
               });
             }
+          }
+          if (availableTiles.length > 0) {
+            const randomIndex = Math.floor(
+              Math.random() * availableTiles.length
+            );
+            const tile = availableTiles.splice(randomIndex, 1)[0];
+            collectibles.push({
+              x: tile.c * TILE_SIZE,
+              y: tile.r * TILE_SIZE,
+              size: TILE_SIZE * 0.8,
+              emoji: powerUpEmoji,
+              type: "power",
+            });
           }
         }
 
@@ -971,13 +1526,16 @@ function populateWordLists() {
           isPaused = true;
           clearInterval(timerInterval);
           cancelAnimationFrame(gameLoopId);
+          deactivatePowerUp();
           if (reason === "gameover") {
             finalScoreGameover.textContent = score;
-            switchScreen("gameOverScreen");
+            updateMissedWordsUI("gameover");
           } else if (reason === "victory") {
             finalScoreVictory.textContent = score;
-            switchScreen("victoryScreen");
+            updateMissedWordsUI("victory");
           }
+          checkAndSaveHighscore(score);
+          showHighscores({ reason, finalScore: score });
         }
 
         function gameLoop() {
@@ -993,7 +1551,8 @@ function populateWordLists() {
         }
 
         function checkCollisions() {
-          collectibles.forEach((c, i) => {
+          for (let i = collectibles.length - 1; i >= 0; i--) {
+            const c = collectibles[i];
             if (
               Math.hypot(
                 player.x + player.size / 2 - (c.x + c.size / 2),
@@ -1001,12 +1560,17 @@ function populateWordLists() {
               ) <
               player.size / 2 + c.size / 2
             ) {
-              collectibles.splice(i, 1);
+              const [collected] = collectibles.splice(i, 1);
               collectSound();
-              askQuestion();
+              if (collected && collected.type === "power") {
+                activatePowerUp();
+              } else {
+                askQuestion();
+              }
             }
-          });
-          enemies.forEach((e) => {
+          }
+          enemies.forEach((e, idx) => {
+            if (e.isEaten) return;
             if (
               Math.hypot(
                 player.x + player.size / 2 - (e.x + e.size / 2),
@@ -1014,12 +1578,18 @@ function populateWordLists() {
               ) <
               player.size / 2 + e.size / 2
             ) {
-              handleEnemyCollision();
+              handleEnemyCollision(idx);
             }
           });
         }
 
-        function handleEnemyCollision() {
+        function handleEnemyCollision(enemyIndex) {
+          const enemy =
+            typeof enemyIndex === "number" ? enemies[enemyIndex] : null;
+          if (powerUpActive && enemy && !enemy.isEaten) {
+            eatGhost(enemy);
+            return;
+          }
           if (isInvincible) return;
           collisionSound();
           lives--;
@@ -1036,8 +1606,64 @@ function populateWordLists() {
           }, gameConfig.invincibilityDuration);
         }
 
+        function showPowerUpBanner() {
+          if (powerUpBanner) {
+            powerUpBanner.classList.remove("hidden");
+          }
+        }
+
+        function hidePowerUpBanner() {
+          if (powerUpBanner) {
+            powerUpBanner.classList.add("hidden");
+          }
+        }
+
+        function deactivatePowerUp() {
+          powerUpActive = false;
+          hidePowerUpBanner();
+          if (powerUpTimeoutId) {
+            clearTimeout(powerUpTimeoutId);
+            powerUpTimeoutId = null;
+          }
+          stopPowerUpMusic();
+        }
+
+        function activatePowerUp() {
+          powerUpActive = true;
+          showPowerUpBanner();
+          if (powerUpTimeoutId) {
+            clearTimeout(powerUpTimeoutId);
+          }
+          powerUpTimeoutId = setTimeout(() => {
+            deactivatePowerUp();
+          }, POWER_UP_DURATION);
+          startPowerUpMusic();
+        }
+
+        function eatGhost(enemy) {
+          if (!enemy) return;
+          collectSound();
+          score += 150;
+          showFeedbackAnimation(scoreDisplay, "+150", "#fde047");
+          lives++;
+          showFeedbackAnimation(livesDisplay, "+1 ❤️", "#4ade80");
+          timer += 10;
+          showFeedbackAnimation(timerDisplay, "+10s", "#fde047");
+          updateUI();
+          enemy.isEaten = true;
+          if (enemy.eatenTimeout) clearTimeout(enemy.eatenTimeout);
+          enemy.eatenTimeout = setTimeout(() => {
+            enemy.isEaten = false;
+            enemy.x = enemy.spawnX;
+            enemy.y = enemy.spawnY;
+            enemy.dx = enemy.speed;
+            enemy.dy = 0;
+          }, 1500);
+        }
+
         function askQuestion() {
           isPaused = true;
+          answerLocked = false;
           const possibleWords = activeWords.filter((word) =>
             selectedQuestionTypes.some((type) => word.hasOwnProperty(type))
           );
@@ -1067,6 +1693,8 @@ function populateWordLists() {
 
         function handleAnswer(e) {
           e.preventDefault();
+          if (answerLocked) return;
+          answerLocked = true;
           const userAnswer = answerInput.value.trim().toLowerCase();
           const correctAnswer = String(
             currentQuestionWord[currentQuestionType]
@@ -1087,6 +1715,7 @@ function populateWordLists() {
               "#4ade80"
             );
             correctSound();
+            handleDifficultWordSuccess(currentQuestionWord);
           } else {
             score += gameConfig.pointsIncorrect;
             if (score < 0) score = 0;
@@ -1107,6 +1736,7 @@ function populateWordLists() {
             );
             showFeedbackAnimation(livesDisplay, "-1 ❤️", "#f87171");
             incorrectSound();
+            recordMissedQuestion(userAnswer);
           }
           updateUI();
           if (lives <= 0) {
@@ -1128,6 +1758,22 @@ function populateWordLists() {
               resumeGame();
             }
           }, 1500);
+        }
+
+        function recordMissedQuestion(userAnswer) {
+          if (!currentQuestionWord) return;
+          const questionLabel = keyMap[currentQuestionType]?.[0] || currentQuestionType;
+          missedQuestions.push({
+            latin: currentQuestionWord.latin,
+            label: questionLabel,
+            correctAnswer: currentQuestionWord[currentQuestionType],
+            userAnswer: userAnswer || "",
+          });
+          missedWordsMap.set(
+            currentQuestionWord.latin,
+            { ...currentQuestionWord }
+          );
+          addWordToDifficultList(currentQuestionWord);
         }
 
         function resumeGame() {
@@ -1176,6 +1822,53 @@ function populateWordLists() {
           timerDisplay.textContent = timer;
           livesDisplay.innerHTML = "❤️".repeat(lives);
         }
+
+        function updateMissedWordsUI(screen) {
+          const containerId =
+            screen === "victory"
+              ? "missed-words-container-victory"
+              : "missed-words-container-gameover";
+          const listId =
+            screen === "victory"
+              ? "missed-words-list-victory"
+              : "missed-words-list-gameover";
+          const container = document.getElementById(containerId);
+          const listEl = document.getElementById(listId);
+          if (!container || !listEl) return;
+          if (missedQuestions.length === 0) {
+            container.classList.add("hidden");
+            return;
+          }
+          container.classList.remove("hidden");
+          listEl.innerHTML = "";
+          missedQuestions.forEach((entry) => {
+            const li = document.createElement("li");
+            const latinEl = document.createElement("strong");
+            latinEl.className = "text-yellow-300";
+            latinEl.textContent = entry.latin;
+            li.appendChild(latinEl);
+
+            const labelEl = document.createElement("span");
+            labelEl.className = "ml-2 text-sm text-gray-300";
+            labelEl.textContent = `(${entry.label})`;
+            li.appendChild(labelEl);
+
+            const arrowText = document.createTextNode(" → ");
+            li.appendChild(arrowText);
+
+            const correctEl = document.createElement("span");
+            correctEl.textContent = entry.correctAnswer;
+            li.appendChild(correctEl);
+
+            const userEl = document.createElement("span");
+            userEl.className = "text-sm text-gray-400 ml-2";
+            userEl.textContent = `(jij: ${entry.userAnswer || "—"})`;
+            li.appendChild(userEl);
+
+            listEl.appendChild(li);
+          });
+        }
+
         function draw() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           drawMaze();
@@ -1183,12 +1876,22 @@ function populateWordLists() {
           if (!(isInvincible && Math.floor(Date.now() / 100) % 2 === 0)) {
             player.draw(); //player.draw("💂");
           }
-          enemies.forEach((enemy) => enemy.draw("👻"));
+          enemies.forEach((enemy) => {
+            if (enemy.isEaten) return;
+            ctx.save();
+            if (powerUpActive) {
+              ctx.shadowColor = "#fde047";
+              ctx.shadowBlur = 20;
+            }
+            enemy.draw("👻");
+            ctx.restore();
+          });
         }
 function drawMaze() {
     const layout = mazeLayouts[currentLevel - 1];
     const colors = ['#00008B', '#483D8B', '#008080', '#556B2F', '#8B0000', '#800080', '#4B0082', '#A0522D', '#6A5ACD', '#2F4F4F'];
-    const wallColor = colors[(currentLevel - 1) % colors.length];
+    const baseWallColor = colors[(currentLevel - 1) % colors.length];
+    const wallColor = powerUpActive ? '#facc15' : baseWallColor;
 
     layout.forEach((row, r) => {
         row.forEach((cell, c) => {
@@ -1246,24 +1949,227 @@ function togglePause() {
 
         function drawCollectibles() {
           collectibles.forEach((c) => {
+            ctx.save();
+            if (c.type === "power") {
+              ctx.shadowColor = "#fde047";
+              ctx.shadowBlur = 25;
+            }
             ctx.font = `${c.size}px serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(c.emoji, c.x + TILE_SIZE / 2, c.y + TILE_SIZE / 2);
+            ctx.restore();
           });
         }
-        function showHighscores() {
-          const list = document.getElementById("highscore-list");
-          list.innerHTML = "";
-          highscores.sort((a, b) => b.score - a.score);
-          highscores.slice(0, 10).forEach((entry) => {
+
+        function practiceMissedWords() {
+          if (Object.keys(difficultWordsData).length === 0) {
+            alert("Er staan geen woorden in de moeilijke woordenlijst.");
+            return;
+          }
+          isHighscoreScreenActive = false;
+          pendingAutoStartList = DIFFICULT_LIST_NAME;
+          shouldAutoOpenQuestionTypes = true;
+          populateWordLists();
+          if (autoStartedFromBuilder) {
+            autoStartedFromBuilder = false;
+            return;
+          }
+          switchScreen("levelSelectScreen");
+          setTimeout(() => {
+            getWordListCheckboxes().forEach((cb) => {
+              cb.checked = cb.value === DIFFICULT_LIST_NAME;
+            });
+            syncSelectAllWordLists();
+          }, 0);
+        }
+        async function fetchPublishedHighscores(saveToCache = true) {
+          if (!highscoreAPI.endpoint) return null;
+          try {
+            const url =
+              highscoreAPI.endpoint.indexOf("?") === -1
+                ? `${highscoreAPI.endpoint}?getHighscores=true`
+                : `${highscoreAPI.endpoint}&getHighscores=true`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!Array.isArray(data)) return null;
+            reconcilePendingHighscores(data);
+            if (saveToCache && data.length) {
+              saveCachedRemoteHighscores(data);
+            }
+            return data;
+          } catch (err) {
+            console.error("Kon remote highscores niet ophalen:", err);
+            return null;
+          }
+        }
+
+        async function sendHighscoreToServer(playerName, playerScore) {
+          if (!highscoreAPI.endpoint || typeof fetch === "undefined") return;
+          const payload = {
+            speler: playerName || "Onbekend",
+            score: playerScore,
+          };
+          if (highscoreAPI.apiKey) payload.apiKey = highscoreAPI.apiKey;
+          const requestInit = {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          };
+
+          const tryPost = async (init, allowErrorLog = true) => {
+            const resp = await fetch(highscoreAPI.endpoint, init);
+            if (init.mode === "no-cors") return; // geen feedback mogelijk
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json().catch(() => null);
+            if (data?.success === false) {
+              throw new Error(data.error || "Onbekende fout");
+            }
+          };
+
+          try {
+            await tryPost(requestInit);
+          } catch (err) {
+            console.warn("Kon highscore niet doorsturen:", err);
+            try {
+              await tryPost({ ...requestInit, mode: "no-cors" }, false);
+              console.warn(
+                "Highscore in 'no-cors'-modus verstuurd (geen bevestiging van server)."
+              );
+            } catch (secondErr) {
+              console.error("Fallback highscore-post mislukt:", secondErr);
+            }
+          }
+        }
+        function reconcilePendingHighscores(remoteScores) {
+          if (!remoteScores || !remoteScores.length) return;
+          let updated = false;
+          remoteScores.forEach((remoteEntry) => {
+            const match = highscores.find(
+              (local) =>
+                local.pending &&
+                local.name === remoteEntry.speler &&
+                Number(local.score) === Number(remoteEntry.score)
+            );
+            if (match) {
+              match.pending = false;
+              updated = true;
+            }
+          });
+          if (updated) persistHighscores();
+        }
+
+        function renderLocalHighscores(list) {
+          if (!highscores.length) return;
+          const header = document.createElement("li");
+          header.className = "text-sm text-gray-400 mt-4 list-none";
+          header.textContent = "Jouw scores:";
+          list.appendChild(header);
+          highscores
+            .slice()
+            .sort((a, b) => b.score - a.score)
+            .forEach((entry) => {
+              const li = document.createElement("li");
+              li.textContent = `${entry.name}: ${entry.score}${
+                entry.pending ? " (nog niet bevestigd)" : ""
+              }`;
+              list.appendChild(li);
+            });
+        }
+
+        function updatePracticeButtonVisibility() {
+          if (!practiceDifficultBtn) return;
+          if (Object.keys(difficultWordsData).length) {
+            practiceDifficultBtn.classList.remove("hidden");
+          } else {
+            practiceDifficultBtn.classList.add("hidden");
+          }
+        }
+
+        function renderRemoteHighscores(list, remoteScores, label) {
+          if (!remoteScores || !remoteScores.length) return false;
+          if (label) {
+            const header = document.createElement("li");
+            header.className = "text-sm text-gray-400 list-none";
+            header.textContent = label;
+            list.appendChild(header);
+          }
+          remoteScores.slice(0, 10).forEach((entry) => {
             const li = document.createElement("li");
-            li.textContent = `${entry.name}: ${entry.score}`;
+            li.textContent = `${entry.speler}: ${entry.score}`;
             list.appendChild(li);
           });
-          if (highscores.length === 0)
-            list.innerHTML = '<li class="text-gray-400">Nog geen scores.</li>';
+          return true;
+        }
+
+        async function showHighscores(context) {
+          const list = document.getElementById("highscore-list");
+          isHighscoreScreenActive = true;
+          if (context && highscoreBanner) {
+            highscoreBanner.classList.remove("hidden");
+            const prefix =
+              context.reason === "victory"
+                ? "Triomf!"
+                : context.reason === "gameover"
+                ? "Slag voorbij"
+                : "Score";
+            highscoreBanner.textContent = `${prefix} – ${context.finalScore} punten`;
+          } else if (highscoreBanner) {
+            highscoreBanner.classList.add("hidden");
+            highscoreBanner.textContent = "";
+          }
           switchScreen("highscoreScreen");
+          list.innerHTML = "";
+          const cachedRemote = loadCachedRemoteHighscores();
+          if (cachedRemote?.scores?.length) {
+            reconcilePendingHighscores(cachedRemote.scores);
+            renderRemoteHighscores(
+              list,
+              cachedRemote.scores,
+              "Gepubliceerde scores (cached)"
+            );
+          } else {
+            const loadingLi = document.createElement("li");
+            loadingLi.className = "text-gray-400";
+            loadingLi.textContent =
+              "Scores laden via de Romeinse archieven...";
+            list.appendChild(loadingLi);
+          }
+          renderLocalHighscores(list);
+          updatePracticeButtonVisibility();
+          if (list.children.length === 0) {
+            list.innerHTML =
+              '<li class="text-gray-400">Nog geen scores beschikbaar.</li>';
+          }
+          const remoteScores = await fetchPublishedHighscores();
+          if (!isHighscoreScreenActive) return;
+          if (remoteScores) {
+            list.innerHTML = "";
+            const renderedRemote = renderRemoteHighscores(
+              list,
+              remoteScores,
+              "Gepubliceerde scores"
+            );
+            if (!renderedRemote) {
+              const li = document.createElement("li");
+              li.className = "text-gray-400";
+              li.textContent = "Nog geen gepubliceerde scores.";
+              list.appendChild(li);
+            }
+          } else {
+            list.innerHTML = "";
+            const li = document.createElement("li");
+            li.className = "text-gray-400";
+            li.textContent = "Kon geen verbinding maken met de server.";
+            list.appendChild(li);
+          }
+          renderLocalHighscores(list);
+          updatePracticeButtonVisibility();
+          if (list.children.length === 0) {
+            list.innerHTML =
+              '<li class="text-gray-400">Nog geen scores beschikbaar.</li>';
+          }
         }
         function checkAndSaveHighscore(finalScore) {
           const isHighscore =
@@ -1273,13 +2179,17 @@ function togglePause() {
             setTimeout(() => {
               const name = prompt("Highscore! Voer je naam in:", "Anonymus");
               if (name) {
-                highscores.push({ name: name, score: finalScore });
+                const newEntry = {
+                  name: name,
+                  score: finalScore,
+                  pending: true,
+                  timestamp: Date.now(),
+                };
+                highscores.push(newEntry);
                 highscores.sort((a, b) => b.score - a.score);
                 highscores = highscores.slice(0, 10);
-                localStorage.setItem(
-                  "latinPacmanHighscores",
-                  JSON.stringify(highscores)
-                );
+                persistHighscores();
+                sendHighscoreToServer(name, finalScore);
               }
             }, 100);
           }
@@ -1297,11 +2207,20 @@ function togglePause() {
             .getElementById("start-game-btn")
             .addEventListener("click", () => switchScreen("levelSelectScreen"));
 
-            document.getElementById('resume-btn').addEventListener('click', togglePause); 
+          document.getElementById("resume-btn").addEventListener("click", togglePause);
 
+          if (customUploadBtn && customWordsInput) {
+            customUploadBtn.addEventListener("click", () => customWordsInput.click());
+            customWordsInput.addEventListener("change", handleCustomWordsUpload);
+          }
 
+          if (practiceDifficultBtn) {
+            practiceDifficultBtn.addEventListener(
+              "click",
+              practiceMissedWords
+            );
+          }
 
-            
           document
             .getElementById("highscores-btn")
             .addEventListener("click", showHighscores);
@@ -1333,23 +2252,29 @@ function togglePause() {
           document
             .getElementById("restart-game-btn")
             .addEventListener("click", () => {
-              checkAndSaveHighscore(score);
               switchScreen("mainMenu");
             });
           document
             .getElementById("restart-victory-btn")
             .addEventListener("click", () => {
-              checkAndSaveHighscore(score);
               switchScreen("mainMenu");
             });
           document
             .getElementById("back-to-menu-from-hs-btn")
-            .addEventListener("click", () => switchScreen("mainMenu"));
+            .addEventListener("click", () => {
+              isHighscoreScreenActive = false;
+              switchScreen("mainMenu");
+            });
           document
             .getElementById("flashcard-continue-btn")
             .addEventListener("click", resumeGame);
           answerForm.addEventListener("submit", handleAnswer);
     window.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !allScreens.flashcardModal.classList.contains('hidden')) {
+            e.preventDefault();
+            resumeGame();
+            return;
+        }
         // Pauzeer het spel met Escape
         if (e.key === 'Escape') {
             togglePause();
@@ -1426,10 +2351,30 @@ function togglePause() {
         window.addEventListener("resize", resizeCanvas);
         setupEventListeners();
         resizeCanvas();
-        switchScreen("loading");
-        await loadWordLists();
-        await populateWordLists();
-        switchScreen("mainMenu");
+
+        const hasCachedLists = loadWordListsFromCache();
+        importBuilderWordsFromStorage();
+        loadDifficultWords();
+
+        if (hasCachedLists) {
+          populateWordLists();
+          if (autoStartedFromBuilder) {
+            autoStartedFromBuilder = false;
+          } else {
+            switchScreen("mainMenu");
+          }
+          refreshWordListsFromNetwork(true).catch((err) =>
+            console.error("Achtergrondvernieuwing mislukt:", err)
+          );
+        } else {
+          switchScreen("loading");
+          await refreshWordListsFromNetwork(false);
+          if (autoStartedFromBuilder) {
+            autoStartedFromBuilder = false;
+          } else {
+            switchScreen("mainMenu");
+          }
+        }
       });
     </script>
   </body>
