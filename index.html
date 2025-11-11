@@ -876,19 +876,127 @@ async function loadWordLists() {
         const DIFFICULT_SUCCESS_THRESHOLD = 3;
         let highscores = loadLocalHighscores();
         let isHighscoreScreenActive = false;
+        let currentSelectedWordLists = [];
+        let highscoreEligibleSelection = false;
+        let totalQuestionsAnswered = 0;
+        let totalQuestionsIncorrect = 0;
+        let gameStartTimestamp = null;
 
         function loadLocalHighscores() {
-          const stored =
-            JSON.parse(localStorage.getItem(LOCAL_HIGHSCORE_KEY)) || [];
-          return stored.map((entry) => ({
-            name: entry.name,
-            score: entry.score,
-            pending: entry.pending ?? false,
-            timestamp: entry.timestamp || Date.now(),
-          }));
+          const raw = JSON.parse(localStorage.getItem(LOCAL_HIGHSCORE_KEY)) || [];
+          return raw
+            .filter((entry) => entry && typeof entry === "object")
+            .map((entry) => {
+              const lists =
+                Array.isArray(entry.lists) && entry.lists.length
+                  ? entry.lists
+                  : typeof entry.lijsten === "string"
+                  ? entry.lijsten
+                      .split(",")
+                      .map((name) => name.trim())
+                      .filter(Boolean)
+                  : [];
+              const durationMs =
+                typeof entry.durationMs === "number"
+                  ? entry.durationMs
+                  : Number.isFinite(entry.durationSeconds)
+                  ? entry.durationSeconds * 1000
+                  : null;
+              return {
+                name: entry.name,
+                score: Number(entry.score) || 0,
+                pending: entry.pending ?? false,
+                timestamp: entry.timestamp || Date.now(),
+                lists,
+                totalQuestions: Number.isFinite(entry.totalQuestions)
+                  ? entry.totalQuestions
+                  : Number(entry.questionsAnswered ?? entry.vragenBeantwoord) ||
+                    0,
+                incorrectQuestions: Number.isFinite(entry.incorrectQuestions)
+                  ? entry.incorrectQuestions
+                  : Number(entry.questionsWrong ?? entry.vragenFout) || 0,
+                finalLevel:
+                  Number(entry.finalLevel ?? entry.level ?? entry.eindLevel) ||
+                  null,
+                durationMs,
+              };
+            });
         }
         function persistHighscores() {
           localStorage.setItem(LOCAL_HIGHSCORE_KEY, JSON.stringify(highscores));
+        }
+
+        function formatWordListLabel(listData) {
+          if (Array.isArray(listData) && listData.length) {
+            return listData.join(", ");
+          }
+          if (typeof listData === "string" && listData.trim()) {
+            return listData;
+          }
+          return "Onbekend";
+        }
+
+        function formatDurationFromSeconds(totalSeconds) {
+          if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "0:00";
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = Math.floor(totalSeconds % 60);
+          return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+        }
+
+        function formatDurationFromMs(ms) {
+          if (!Number.isFinite(ms) || ms <= 0) return "0:00";
+          return formatDurationFromSeconds(Math.round(ms / 1000));
+        }
+
+        function buildHighscoreDetailsNode({
+          listsLabel,
+          totalQuestions,
+          incorrectQuestions,
+          finalLevel,
+          durationLabel,
+        }) {
+          const container = document.createElement("div");
+          container.className =
+            "text-sm text-gray-300 ml-6 leading-snug space-y-1";
+
+          const listRow = document.createElement("div");
+          listRow.textContent = `Woordenlijsten: ${listsLabel || "Onbekend"}`;
+          container.appendChild(listRow);
+
+          const answeredText = Number.isFinite(totalQuestions)
+            ? totalQuestions
+            : "-";
+          const wrongText = Number.isFinite(incorrectQuestions)
+            ? incorrectQuestions
+            : "-";
+          const questionRow = document.createElement("div");
+          questionRow.textContent = `Vragen: ${answeredText} totaal • ${wrongText} fout`;
+          container.appendChild(questionRow);
+
+          const levelText =
+            Number.isFinite(finalLevel) && finalLevel > 0 ? finalLevel : "-";
+          const levelRow = document.createElement("div");
+          levelRow.textContent = `Eindlevel: ${levelText}`;
+          container.appendChild(levelRow);
+
+          const durationRow = document.createElement("div");
+          durationRow.textContent = `Speeltijd: ${durationLabel || "0:00"}`;
+          container.appendChild(durationRow);
+
+          return container;
+        }
+
+        function determineHighscoreEligibility(listNames) {
+          if (!Array.isArray(listNames) || !listNames.length) return false;
+          if (listNames.includes(DIFFICULT_LIST_NAME)) return false;
+          return !listNames.some(
+            (name) =>
+              name !== DIFFICULT_LIST_NAME &&
+              Object.prototype.hasOwnProperty.call(
+                customWordDatabases,
+                name
+              )
+          );
         }
         function loadCachedRemoteHighscores() {
           try {
@@ -1437,6 +1545,10 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             alert("Selecteer minstens één woordenlijst!");
             return;
           }
+          currentSelectedWordLists = selectedLists.slice();
+          highscoreEligibleSelection = determineHighscoreEligibility(
+            currentSelectedWordLists
+          );
           practicingDifficultOnly =
             selectedLists.length === 1 &&
             selectedLists[0] === DIFFICULT_LIST_NAME;
@@ -1504,6 +1616,12 @@ async function refreshWordListsFromNetwork(isBackground = false) {
           difficultCompletionNotified = false;
           missedQuestions = [];
           missedWordsMap = new Map();
+          totalQuestionsAnswered = 0;
+          totalQuestionsIncorrect = 0;
+          gameStartTimestamp = Date.now();
+          highscoreEligibleSelection = determineHighscoreEligibility(
+            currentSelectedWordLists
+          );
           hasActiveGame = true;
 
           switchScreen("gameContainer");
@@ -1633,8 +1751,12 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             finalScoreVictory.textContent = score;
             updateMissedWordsUI("victory");
           }
-          checkAndSaveHighscore(score);
-          showHighscores({ reason, finalScore: score });
+          checkAndSaveHighscore(score, reason);
+          showHighscores({
+            reason,
+            finalScore: score,
+            eligibleForHighscore: highscoreEligibleSelection,
+          });
         }
 
         function gameLoop() {
@@ -1804,6 +1926,7 @@ async function refreshWordListsFromNetwork(isBackground = false) {
           e.preventDefault();
           if (answerLocked) return;
           answerLocked = true;
+          totalQuestionsAnswered++;
           const userAnswer = answerInput.value.trim().toLowerCase();
           const correctAnswer = String(
             currentQuestionWord[currentQuestionType]
@@ -1845,6 +1968,7 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             );
             showFeedbackAnimation(livesDisplay, "-1 ❤️", "#f87171");
             incorrectSound();
+            totalQuestionsIncorrect++;
             recordMissedQuestion(userAnswer);
           }
           updateUI();
@@ -2120,12 +2244,36 @@ function togglePause() {
           }
         }
 
-        async function sendHighscoreToServer(playerName, playerScore) {
+        async function sendHighscoreToServer(
+          playerName,
+          playerScore,
+          meta = {}
+        ) {
           if (!highscoreAPI.endpoint || typeof fetch === "undefined") return;
           const payload = {
             speler: playerName || "Onbekend",
             score: playerScore,
           };
+          const listLabel = Array.isArray(meta.lists)
+            ? meta.lists.join(", ")
+            : meta.lijsten || meta.wordLists || "";
+          payload.lijsten = listLabel;
+          payload.vragenBeantwoord = Number.isFinite(meta.totalQuestions)
+            ? meta.totalQuestions
+            : Number(meta.vragenBeantwoord) || 0;
+          payload.vragenFout = Number.isFinite(meta.incorrectQuestions)
+            ? meta.incorrectQuestions
+            : Number(meta.vragenFout) || 0;
+          payload.eindLevel = Number.isFinite(meta.finalLevel)
+            ? meta.finalLevel
+            : Number(meta.eindLevel) || 1;
+          const durationSeconds =
+            typeof meta.durationMs === "number"
+              ? Math.max(0, Math.round(meta.durationMs / 1000))
+              : Number.isFinite(meta.durationSeconds)
+              ? Math.max(0, Math.round(meta.durationSeconds))
+              : 0;
+          payload.speelduurSeconden = durationSeconds;
           if (highscoreAPI.apiKey) payload.apiKey = highscoreAPI.apiKey;
           const requestInit = {
             method: "POST",
@@ -2186,9 +2334,21 @@ function togglePause() {
             .sort((a, b) => b.score - a.score)
             .forEach((entry) => {
               const li = document.createElement("li");
-              li.textContent = `${entry.name}: ${entry.score}${
-                entry.pending ? " (nog niet bevestigd)" : ""
-              }`;
+              const heading = document.createElement("div");
+              heading.className = "font-semibold";
+              heading.textContent = `${entry.name || "Onbekend"}: ${
+                entry.score
+              }${entry.pending ? " (nog niet bevestigd)" : ""}`;
+              li.appendChild(heading);
+              li.appendChild(
+                buildHighscoreDetailsNode({
+                  listsLabel: formatWordListLabel(entry.lists),
+                  totalQuestions: entry.totalQuestions,
+                  incorrectQuestions: entry.incorrectQuestions,
+                  finalLevel: entry.finalLevel,
+                  durationLabel: formatDurationFromMs(entry.durationMs),
+                })
+              );
               list.appendChild(li);
             });
         }
@@ -2220,7 +2380,23 @@ function togglePause() {
               typeof rawScore === "number"
                 ? rawScore
                 : Number(rawScore) || 0;
-            li.textContent = `${playerName}: ${playerScore}`;
+            const heading = document.createElement("div");
+            heading.className = "font-semibold";
+            heading.textContent = `${playerName}: ${playerScore}`;
+            li.appendChild(heading);
+            li.appendChild(
+              buildHighscoreDetailsNode({
+                listsLabel: formatWordListLabel(
+                  entry?.lijsten || entry?.lists || entry?.wordLists
+                ),
+                totalQuestions: Number(entry?.vragenBeantwoord),
+                incorrectQuestions: Number(entry?.vragenFout),
+                finalLevel: Number(entry?.eindLevel),
+                durationLabel: formatDurationFromSeconds(
+                  Number(entry?.speelduurSeconden)
+                ),
+              })
+            );
             list.appendChild(li);
           });
           return true;
@@ -2252,7 +2428,30 @@ function togglePause() {
             highscoreBanner.textContent = "";
           }
           switchScreen("highscoreScreen");
+          const appendIneligibleNote = () => {
+            if (context?.eligibleForHighscore === false) {
+              const note = document.createElement("li");
+              note.className = "text-sm text-orange-300 list-none mb-2";
+              note.textContent =
+                "Highscores worden niet opgeslagen voor eigen lijsten of 'Moeilijke woorden'.";
+              note.dataset.role = "highscore-note";
+              list.appendChild(note);
+            }
+          };
+          const hasScoreEntries = () =>
+            Array.from(list.children).some(
+              (child) => !child.classList?.contains("list-none")
+            );
+          const showEmptyState = () => {
+            list.innerHTML = "";
+            appendIneligibleNote();
+            const empty = document.createElement("li");
+            empty.className = "text-gray-400";
+            empty.textContent = "Nog geen scores beschikbaar.";
+            list.appendChild(empty);
+          };
           list.innerHTML = "";
+          appendIneligibleNote();
           const cachedRemote = loadCachedRemoteHighscores();
           if (cachedRemote?.scores?.length) {
             reconcilePendingHighscores(cachedRemote.scores);
@@ -2270,14 +2469,14 @@ function togglePause() {
           }
           renderLocalHighscores(list);
           updatePracticeButtonVisibility();
-          if (list.children.length === 0) {
-            list.innerHTML =
-              '<li class="text-gray-400">Nog geen scores beschikbaar.</li>';
+          if (!hasScoreEntries()) {
+            showEmptyState();
           }
           const remoteScores = await fetchPublishedHighscores();
           if (!isHighscoreScreenActive) return;
           if (remoteScores) {
             list.innerHTML = "";
+            appendIneligibleNote();
             const renderedRemote = renderRemoteHighscores(
               list,
               remoteScores,
@@ -2291,6 +2490,7 @@ function togglePause() {
             }
           } else {
             list.innerHTML = "";
+            appendIneligibleNote();
             const li = document.createElement("li");
             li.className = "text-gray-400";
             li.textContent = "Kon geen verbinding maken met de server.";
@@ -2298,33 +2498,53 @@ function togglePause() {
           }
           renderLocalHighscores(list);
           updatePracticeButtonVisibility();
-          if (list.children.length === 0) {
-            list.innerHTML =
-              '<li class="text-gray-400">Nog geen scores beschikbaar.</li>';
+          if (!hasScoreEntries()) {
+            showEmptyState();
           }
         }
-        function checkAndSaveHighscore(finalScore) {
+        function checkAndSaveHighscore(finalScore, reason) {
+          if (!highscoreEligibleSelection) {
+            console.info(
+              "Highscore niet opgeslagen: eigen lijsten of 'Moeilijke woorden' geselecteerd."
+            );
+            return;
+          }
           const isHighscore =
             highscores.length < 10 ||
             finalScore > (highscores[highscores.length - 1]?.score || 0);
-          if (isHighscore) {
-            setTimeout(() => {
-              const name = prompt("Highscore! Voer je naam in:", "Anonymus");
-              if (name) {
-                const newEntry = {
-                  name: name,
-                  score: finalScore,
-                  pending: true,
-                  timestamp: Date.now(),
-                };
-                highscores.push(newEntry);
-                highscores.sort((a, b) => b.score - a.score);
-                highscores = highscores.slice(0, 10);
-                persistHighscores();
-                sendHighscoreToServer(name, finalScore);
-              }
-            }, 100);
-          }
+          if (!isHighscore) return;
+          const normalizedLevel =
+            reason === "victory"
+              ? mazeLayouts.length
+              : Math.min(Math.max(currentLevel, 1), mazeLayouts.length);
+          const rawDuration =
+            typeof gameStartTimestamp === "number"
+              ? Date.now() - gameStartTimestamp
+              : null;
+          const metadata = {
+            lists: currentSelectedWordLists.slice(),
+            totalQuestions: totalQuestionsAnswered,
+            incorrectQuestions: totalQuestionsIncorrect,
+            finalLevel: normalizedLevel,
+            durationMs: rawDuration && rawDuration > 0 ? rawDuration : null,
+          };
+          setTimeout(() => {
+            const nameInput = prompt("Highscore! Voer je naam in:", "Anonymus");
+            const name = nameInput ? nameInput.trim() : "";
+            if (!name) return;
+            const newEntry = {
+              name,
+              score: finalScore,
+              pending: true,
+              timestamp: Date.now(),
+              ...metadata,
+            };
+            highscores.push(newEntry);
+            highscores.sort((a, b) => b.score - a.score);
+            highscores = highscores.slice(0, 10);
+            persistHighscores();
+            sendHighscoreToServer(name, finalScore, newEntry);
+          }, 100);
         }
         function showFeedbackAnimation(element, text, color) {
           const el = document.createElement("div");
