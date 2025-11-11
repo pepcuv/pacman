@@ -362,7 +362,7 @@
       </h2>
       <ol
         id="highscore-list"
-        class="list-decimal list-inside space-y-2 text-xl"
+        class="list-decimal list-outside space-y-2 text-xl pl-6"
       >
         <!-- Highscores -->
       </ol>
@@ -984,6 +984,34 @@ async function loadWordLists() {
           container.appendChild(durationRow);
 
           return container;
+        }
+
+        function createHighscoreDetailsToggle(detailsNode) {
+          if (!detailsNode) return null;
+          const toggleBtn = document.createElement("button");
+          toggleBtn.type = "button";
+          toggleBtn.className =
+            "text-sm text-yellow-300 hover:text-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-300 px-2 py-1 rounded";
+          toggleBtn.textContent = "ℹ️";
+          toggleBtn.setAttribute("aria-expanded", "false");
+          toggleBtn.setAttribute("title", "Toon details");
+
+          const wrapper = document.createElement("div");
+          wrapper.className = "mt-2 hidden";
+          wrapper.appendChild(detailsNode);
+
+          toggleBtn.addEventListener("click", () => {
+            const isHidden = wrapper.classList.toggle("hidden");
+            const expanded = !isHidden;
+            toggleBtn.setAttribute("aria-expanded", String(expanded));
+            toggleBtn.textContent = expanded ? "✖️" : "ℹ️";
+            toggleBtn.setAttribute(
+              "title",
+              expanded ? "Verberg details" : "Toon details"
+            );
+          });
+
+          return { toggleBtn, wrapper };
         }
 
         function determineHighscoreEligibility(listNames) {
@@ -2335,20 +2363,28 @@ function togglePause() {
             .forEach((entry) => {
               const li = document.createElement("li");
               const heading = document.createElement("div");
-              heading.className = "font-semibold";
-              heading.textContent = `${entry.name || "Onbekend"}: ${
+              heading.className =
+                "font-semibold flex items-center justify-between gap-2";
+              const title = document.createElement("span");
+              title.textContent = `${entry.name || "Onbekend"}: ${
                 entry.score
               }${entry.pending ? " (nog niet bevestigd)" : ""}`;
+              heading.appendChild(title);
+              const detailsNode = buildHighscoreDetailsNode({
+                listsLabel: formatWordListLabel(entry.lists),
+                totalQuestions: entry.totalQuestions,
+                incorrectQuestions: entry.incorrectQuestions,
+                finalLevel: entry.finalLevel,
+                durationLabel: formatDurationFromMs(entry.durationMs),
+              });
+              const toggle = createHighscoreDetailsToggle(detailsNode);
+              if (toggle) {
+                heading.appendChild(toggle.toggleBtn);
+              }
               li.appendChild(heading);
-              li.appendChild(
-                buildHighscoreDetailsNode({
-                  listsLabel: formatWordListLabel(entry.lists),
-                  totalQuestions: entry.totalQuestions,
-                  incorrectQuestions: entry.incorrectQuestions,
-                  finalLevel: entry.finalLevel,
-                  durationLabel: formatDurationFromMs(entry.durationMs),
-                })
-              );
+              if (toggle) {
+                li.appendChild(toggle.wrapper);
+              }
               list.appendChild(li);
             });
         }
@@ -2381,22 +2417,30 @@ function togglePause() {
                 ? rawScore
                 : Number(rawScore) || 0;
             const heading = document.createElement("div");
-            heading.className = "font-semibold";
-            heading.textContent = `${playerName}: ${playerScore}`;
+            heading.className =
+              "font-semibold flex items-center justify-between gap-2";
+            const title = document.createElement("span");
+            title.textContent = `${playerName}: ${playerScore}`;
+            heading.appendChild(title);
+            const detailsNode = buildHighscoreDetailsNode({
+              listsLabel: formatWordListLabel(
+                entry?.lijsten || entry?.lists || entry?.wordLists
+              ),
+              totalQuestions: Number(entry?.vragenBeantwoord),
+              incorrectQuestions: Number(entry?.vragenFout),
+              finalLevel: Number(entry?.eindLevel),
+              durationLabel: formatDurationFromSeconds(
+                Number(entry?.speelduurSeconden)
+              ),
+            });
+            const toggle = createHighscoreDetailsToggle(detailsNode);
+            if (toggle) {
+              heading.appendChild(toggle.toggleBtn);
+            }
             li.appendChild(heading);
-            li.appendChild(
-              buildHighscoreDetailsNode({
-                listsLabel: formatWordListLabel(
-                  entry?.lijsten || entry?.lists || entry?.wordLists
-                ),
-                totalQuestions: Number(entry?.vragenBeantwoord),
-                incorrectQuestions: Number(entry?.vragenFout),
-                finalLevel: Number(entry?.eindLevel),
-                durationLabel: formatDurationFromSeconds(
-                  Number(entry?.speelduurSeconden)
-                ),
-              })
-            );
+            if (toggle) {
+              li.appendChild(toggle.wrapper);
+            }
             list.appendChild(li);
           });
           return true;
