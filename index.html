@@ -375,6 +375,7 @@
         const gameConfig = {
           initialTime: 20,
           initialLives: 3,
+          maxLives: 6,
           pointsCorrect: 100,
           timeBonusCorrect: 6,
           pointsIncorrect: -50,
@@ -515,17 +516,21 @@
             }, "4n");
           }
           if (Tone.context.state !== "running") {
-            Tone.start();
+            Tone.start().catch(() => {});
           }
           if (Tone.Transport.state !== "started") {
             Tone.Transport.start();
           }
-          powerUpLoop.start(Tone.now());
+          if (powerUpLoop.state !== "started") {
+            powerUpLoop.start(0);
+          }
         }
 
         function stopPowerUpMusic() {
           if (powerUpLoop) {
-            powerUpLoop.stop();
+            if (powerUpLoop.state === "started") {
+              powerUpLoop.stop(0);
+            }
             powerUpPatternIndex = 0;
           }
         }
@@ -778,7 +783,8 @@ async function loadWordLists() {
           activeWords,
           isPaused,
           isInvincible,
-          gameLoopId;
+          gameLoopId,
+          hasActiveGame = false;
         let currentQuestionWord, currentQuestionType;
         let selectedQuestionTypes = [],
           showFlashcard = false;
@@ -1418,6 +1424,7 @@ async function refreshWordListsFromNetwork(isBackground = false) {
           difficultCompletionNotified = false;
           missedQuestions = [];
           missedWordsMap = new Map();
+          hasActiveGame = true;
 
           switchScreen("gameContainer");
           startLevel();
@@ -1442,7 +1449,14 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             }
           }, 1000);
           if (gameLoopId) cancelAnimationFrame(gameLoopId);
-          gameLoop();
+          gameLoopId = null;
+          ensureGameLoopRunning();
+        }
+
+        function ensureGameLoopRunning() {
+          if (!gameLoopId) {
+            gameLoopId = requestAnimationFrame(gameLoop);
+          }
         }
 
         function setupLevelEntities() {
@@ -1524,9 +1538,14 @@ async function refreshWordListsFromNetwork(isBackground = false) {
 
         function endGame(reason) {
           isPaused = true;
+          hasActiveGame = false;
           clearInterval(timerInterval);
           cancelAnimationFrame(gameLoopId);
+          gameLoopId = null;
           deactivatePowerUp();
+          allScreens.questionModal.classList.add("hidden");
+          allScreens.flashcardModal.classList.add("hidden");
+          allScreens.pauseScreen.classList.add("hidden");
           if (reason === "gameover") {
             finalScoreGameover.textContent = score;
             updateMissedWordsUI("gameover");
@@ -1539,8 +1558,8 @@ async function refreshWordListsFromNetwork(isBackground = false) {
         }
 
         function gameLoop() {
-          if (isPaused) {
-            gameLoopId = requestAnimationFrame(gameLoop);
+          if (isPaused || !hasActiveGame) {
+            gameLoopId = null;
             return;
           }
           player.update();
@@ -1645,8 +1664,13 @@ async function refreshWordListsFromNetwork(isBackground = false) {
           collectSound();
           score += 150;
           showFeedbackAnimation(scoreDisplay, "+150", "#fde047");
-          lives++;
-          showFeedbackAnimation(livesDisplay, "+1 ❤️", "#4ade80");
+          const gainedLife = lives < gameConfig.maxLives;
+          if (gainedLife) {
+            lives++;
+            showFeedbackAnimation(livesDisplay, "+1 ❤️", "#4ade80");
+          } else {
+            lives = gameConfig.maxLives;
+          }
           timer += 10;
           showFeedbackAnimation(timerDisplay, "+10s", "#fde047");
           updateUI();
@@ -1671,7 +1695,12 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             console.error(
               "Geen woorden gevonden met de geselecteerde vraagtypes."
             );
-            isPaused = false;
+            if (practicingDifficultOnly && !difficultCompletionNotified) {
+              announceDifficultWordsCleared();
+            } else {
+              isPaused = false;
+              ensureGameLoopRunning();
+            }
             return;
           }
 
@@ -1777,6 +1806,7 @@ async function refreshWordListsFromNetwork(isBackground = false) {
         }
 
         function resumeGame() {
+          if (!hasActiveGame) return;
           // Herstel het spelscherm en verberg alle andere schermen
           switchScreen("gameContainer");
 
@@ -1785,6 +1815,7 @@ async function refreshWordListsFromNetwork(isBackground = false) {
             nextLevel();
           } else {
             isPaused = false;
+            ensureGameLoopRunning();
           }
         }
 
@@ -1931,7 +1962,7 @@ function togglePause() {
     const isAnyModalOpen = !allScreens.questionModal.classList.contains('hidden') ||
                            !allScreens.flashcardModal.classList.contains('hidden');
 
-    if (!gameIsActive || isAnyModalOpen) {
+    if (!gameIsActive || isAnyModalOpen || !hasActiveGame) {
         return; // Doe niets als we niet in het spel zijn of een vraag openstaat.
     }
 
@@ -1939,10 +1970,14 @@ function togglePause() {
 
     if (isPaused) {
         allScreens.pauseScreen.classList.remove('hidden');
+        if (gameLoopId) {
+            cancelAnimationFrame(gameLoopId);
+            gameLoopId = null;
+        }
     } else {
         allScreens.pauseScreen.classList.add('hidden');
         // Belangrijk: start de gameloop opnieuw als we hervatten
-        requestAnimationFrame(gameLoop); 
+        ensureGameLoopRunning();
     }
 }
 
