@@ -2193,18 +2193,35 @@ function togglePause() {
             header.textContent = label;
             list.appendChild(header);
           }
-          remoteScores.slice(0, 10).forEach((entry) => {
+          remoteScores.slice(0, 10).forEach((entry, idx) => {
             const li = document.createElement("li");
-            li.textContent = `${entry.speler}: ${entry.score}`;
+            li.value = idx + 1; // force numbering to stay in sync
+            const playerName = entry?.speler || "Onbekend";
+            const rawScore =
+              entry?.score ?? entry?.punten ?? entry?.points ?? entry?.value;
+            const playerScore =
+              typeof rawScore === "number"
+                ? rawScore
+                : Number(rawScore) || 0;
+            li.textContent = `${playerName}: ${playerScore}`;
             list.appendChild(li);
           });
           return true;
         }
 
-        async function showHighscores(context) {
+        async function showHighscores(rawContext) {
+          const context =
+            rawContext &&
+            typeof rawContext === "object" &&
+            Object.prototype.hasOwnProperty.call(rawContext, "finalScore")
+              ? rawContext
+              : null;
+          const hasScore =
+            context && Number.isFinite(Number(context.finalScore));
+          const displayedScore = hasScore ? Number(context.finalScore) : null;
           const list = document.getElementById("highscore-list");
           isHighscoreScreenActive = true;
-          if (context && highscoreBanner) {
+          if (context && highscoreBanner && displayedScore !== null) {
             highscoreBanner.classList.remove("hidden");
             const prefix =
               context.reason === "victory"
@@ -2212,7 +2229,7 @@ function togglePause() {
                 : context.reason === "gameover"
                 ? "Slag voorbij"
                 : "Score";
-            highscoreBanner.textContent = `${prefix} – ${context.finalScore} punten`;
+            highscoreBanner.textContent = `${prefix} – ${displayedScore} punten`;
           } else if (highscoreBanner) {
             highscoreBanner.classList.add("hidden");
             highscoreBanner.textContent = "";
@@ -2321,7 +2338,7 @@ function togglePause() {
 
           document
             .getElementById("highscores-btn")
-            .addEventListener("click", showHighscores);
+            .addEventListener("click", () => showHighscores());
 /*          document.getElementById("exit-btn").addEventListener("click", () => {
             if (confirm("Weet je zeker dat je wilt stoppen?")) {
               switchScreen("mainMenu");
