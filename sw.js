@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1.0.2";
+const CACHE_VERSION = "1.0.3";
 const STATIC_CACHE = `roman-pacman-static-${CACHE_VERSION}`;
 const DATA_CACHE = `roman-pacman-data-${CACHE_VERSION}`;
 
@@ -16,6 +16,27 @@ const DATA_ENDPOINTS = [
   "https://script.google.com/macros/s/AKfycbz85fmgKj32QQOTCJzgUv2iCpnh7JRrdgRLwmrYdRkaYBMAXYuc9FHtaryg9tLf3y0Big/exec",
   "https://script.google.com/macros/s/AKfycbxDpJirwZNmTVFLfVvqv9RXm-eRtlYBWO3xMi9IfFRl8225RZqT5MrYcoyo6cZpgFIC6g/exec",
 ];
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "GET_SW_VERSION") return;
+
+  const payload = {
+    type: "SW_VERSION",
+    version: CACHE_VERSION,
+    staticCache: STATIC_CACHE,
+    dataCache: DATA_CACHE,
+  };
+
+  if (event.source?.postMessage) {
+    event.source.postMessage(payload);
+    return;
+  }
+
+  // Fallback for environments where event.source is missing (older browsers).
+  self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((clients) => clients.forEach((client) => client.postMessage(payload)));
+});
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

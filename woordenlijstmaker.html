@@ -56,9 +56,26 @@
         .delete-btn:hover {
             background-color: #e53e3e;
         }
+        #sw-version-indicator {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: rgba(45, 55, 72, 0.95);
+            border: 1px solid #4a5568;
+            border-radius: 9999px;
+            padding: 0.35rem 1rem;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #e2e8f0;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8">
+    <div id="sw-version-indicator">Serviceworker initialiseren…</div>
     <div class="max-w-7xl mx-auto">
         <h1 class="text-4xl text-center mb-2 text-yellow-300">Woorden Bouwer</h1>
         <p class="text-center text-gray-400 mb-8">Voeg woorden toe en download het JSON-bestand voor je spel.</p>
@@ -101,6 +118,52 @@
     </div>
 
     <script>
+        const swVersionIndicator = document.getElementById('sw-version-indicator');
+
+        const setSwIndicator = (message) => {
+            if (!swVersionIndicator) return;
+            swVersionIndicator.textContent = message;
+        };
+
+        const requestSwVersion = () => {
+            if (!('serviceWorker' in navigator)) return false;
+            const controller = navigator.serviceWorker.controller;
+            if (!controller) return false;
+            controller.postMessage({ type: 'GET_SW_VERSION' });
+            return true;
+        };
+
+        function setupSwVersionTracking() {
+            if (!swVersionIndicator) return;
+            if (!('serviceWorker' in navigator)) {
+                setSwIndicator('Serviceworker niet ondersteund');
+                return;
+            }
+
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data?.type !== 'SW_VERSION') return;
+                const { version, staticCache } = event.data;
+                setSwIndicator(`SW v${version} • ${staticCache}`);
+            });
+
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                setSwIndicator('Serviceworker bijwerken…');
+                setTimeout(() => {
+                    if (!requestSwVersion()) {
+                        setSwIndicator('Serviceworker wordt actief na herladen');
+                    }
+                }, 150);
+            });
+
+            if (!requestSwVersion()) {
+                setSwIndicator('Serviceworker installeren…');
+            } else {
+                setSwIndicator('Serviceworker versie ophalen…');
+            }
+        }
+
+        setupSwVersionTracking();
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(err => {
