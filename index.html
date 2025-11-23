@@ -17,8 +17,39 @@
         font-family: "Cinzel", serif;
         background-color: #1a202c;
         color: #f7fafc;
-        overflow: hidden;
-        touch-action: none; /* Voorkom scrollen op mobiel */
+        overflow-x: hidden;
+        overflow-y: auto;
+        touch-action: pan-y;
+      }
+      #highscore-screen {
+        max-height: 90vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+      }
+      #highscore-list {
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0 0.75rem 0 2.25rem;
+        list-style-position: outside; /* nummers links maar zichtbaar */
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e0 #2d3748;
+      }
+      #highscore-list::-webkit-scrollbar {
+        width: 10px;
+      }
+      #highscore-list::-webkit-scrollbar-track {
+        background: #2d3748;
+        border-radius: 999px;
+        border: 1px solid #4a5568;
+      }
+      #highscore-list::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #cbd5e0, #a0aec0);
+        border-radius: 999px;
+        border: 1px solid #4a5568;
+      }
+      #highscore-list::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #e2e8f0, #cbd5e0);
       }
       .menu-button {
         background-color: #4a5568;
@@ -2406,7 +2437,7 @@ function togglePause() {
             header.textContent = label;
             list.appendChild(header);
           }
-          remoteScores.slice(0, 10).forEach((entry, idx) => {
+          remoteScores.forEach((entry, idx) => {
             const li = document.createElement("li");
             li.value = idx + 1; // force numbering to stay in sync
             const playerName = entry?.speler || "Onbekend";
