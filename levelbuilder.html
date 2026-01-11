@@ -54,6 +54,22 @@
 
         <canvas id="levelCanvas" class="mx-auto"></canvas>
 
+        <div class="mt-6 bg-gray-800 p-4 rounded-lg space-y-4">
+            <h2 class="text-2xl text-yellow-300">Bestaande leveldata plakken</h2>
+            <p class="text-gray-300 text-sm">
+                Plak hier de volledige array (bijv. de 1/0 matrix uit <code>index.html</code>) en klik op <strong>Laad level</strong> om hem te bewerken.
+            </p>
+            <textarea
+                id="import-input"
+                rows="6"
+                class="w-full bg-gray-900 text-white p-3 rounded border border-gray-600 focus:outline-none focus:border-yellow-400"
+                placeholder="[ [1,1,1,...], ... ]"
+            ></textarea>
+            <button id="load-btn" class="tool-button w-full bg-blue-700 hover:bg-blue-600 border-blue-500">
+                Laad level
+            </button>
+        </div>
+
         <div id="notification" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 pointer-events-none">
             Level data gekopieerd!
         </div>
@@ -69,6 +85,8 @@
         const resetBtn = document.getElementById('reset-btn');
         const notification = document.getElementById('notification');
         const outputArea = document.getElementById('output');
+        const importInput = document.getElementById('import-input');
+        const loadBtn = document.getElementById('load-btn');
 
         // Grid-instellingen (moeten overeenkomen met het spel)
         const MAZE_COLS = 20;
@@ -154,6 +172,23 @@
         canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 
+        function showNotificationMessage(message, type = 'success') {
+            if (!notification) return;
+            notification.textContent = message;
+            notification.classList.remove('bg-green-500', 'bg-red-500', 'bg-blue-500');
+            const colorClass =
+                type === 'error'
+                    ? 'bg-red-500'
+                    : type === 'info'
+                    ? 'bg-blue-500'
+                    : 'bg-green-500';
+            notification.classList.add(colorClass);
+            notification.classList.remove('opacity-0');
+            setTimeout(() => {
+                notification.classList.add('opacity-0');
+            }, 2000);
+        }
+
         copyBtn.addEventListener('click', () => {
             let outputString = '[\n';
             mazeData.forEach((row, index) => {
@@ -167,14 +202,50 @@
             try {
                 // Gebruik document.execCommand voor betere compatibiliteit in iframes
                 document.execCommand('copy');
-                notification.classList.remove('opacity-0');
-                setTimeout(() => {
-                    notification.classList.add('opacity-0');
-                }, 2000);
+                showNotificationMessage('Level data gekopieerd!');
             } catch (err) {
                 console.error('Kon niet naar klembord kopiëren: ', err);
                 alert('Kon niet naar klembord kopiëren. Kopieer de data handmatig.');
             }
+        });
+
+        function normalizeImportedData(data) {
+            const normalized = Array(MAZE_ROWS)
+                .fill(0)
+                .map(() => Array(MAZE_COLS).fill(0));
+            const maxRows = Math.min(MAZE_ROWS, data.length);
+            for (let r = 0; r < maxRows; r++) {
+                if (!Array.isArray(data[r])) continue;
+                const maxCols = Math.min(MAZE_COLS, data[r].length);
+                for (let c = 0; c < maxCols; c++) {
+                    normalized[r][c] = Number(data[r][c]) === 1 ? 1 : 0;
+                }
+            }
+            return normalized;
+        }
+
+        loadBtn.addEventListener('click', () => {
+            const raw = importInput.value.trim();
+            if (!raw) {
+                showNotificationMessage('Plak eerst de leveldata.', 'error');
+                return;
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (err) {
+                console.error('Kon leveldata niet parseren:', err);
+                showNotificationMessage('Ongeldig JSON-formaat.', 'error');
+                return;
+            }
+            if (!Array.isArray(parsed) || !parsed.length) {
+                showNotificationMessage('Verwacht een array met rijen.', 'error');
+                return;
+            }
+            mazeData = normalizeImportedData(parsed);
+            drawGrid();
+            importInput.value = '';
+            showNotificationMessage('Level geladen. Veel plezier met bewerken!', 'info');
         });
 
         resetBtn.addEventListener('click', () => {
