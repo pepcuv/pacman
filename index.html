@@ -506,9 +506,10 @@
 
         const keyMap = {
           nederlands: ["Nederlands", "Vertaal:"],
+          naamval: ["Naamval", "Welke naamval hoort bij dit voorzetsel? "],
           genitief: ["Genitief", "Wat is de genitief van:"],
           geslacht: ["Geslacht (m/v/o)", "Wat is het geslacht (m/v/o) van:"],
-          woordsoort: ["Woordsoort", "Wat is de woordsoort (bn, zn, bw, vw, ww, ontk, vraagpartikel, onbep. vnw., tussenwerpsel, persoon. vnw., vragend vnw.) van:"],
+          woordsoort: ["Woordsoort", "Wat is de woordsoort (bn, zn, bw, vw, ww, ontk, vraagpartikel, onbep. vnw., tussenwerpsel, persoon. vnw., vragend vnw., voorzetsel) van:"],
           mannelijk: ["Mannelijke vorm", "Wat is de mannelijke vorm van:"],
           vrouwelijk: ["Vrouwelijke vorm", "Wat is de vrouwelijke vorm van:"],
           eerstepersoon: ["Eerste persoon", "Wat is de eerste persoon van:"],
@@ -517,6 +518,7 @@
 
         const jsonKeyAbbreviations = {
           NL: "nederlands",
+          NV: "naamval",
           GT: "genitief",
           GS: "geslacht",
           WS: "woordsoort",
@@ -542,8 +544,6 @@
         const powerUpEmoji = "🍴";
         const POWER_UP_DURATION = 15000;
         const BUILDER_STORAGE_KEY = "latinPacmanBuilderWords";
-
-
         // --- Initialisatie ---
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");

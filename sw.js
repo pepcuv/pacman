@@ -1,4 +1,4 @@
-const CACHE_VERSION = "1.1.0";
+const CACHE_VERSION = "1.1.1";
 const STATIC_CACHE = `roman-pacman-static-${CACHE_VERSION}`;
 const DATA_CACHE = `roman-pacman-data-${CACHE_VERSION}`;
 
